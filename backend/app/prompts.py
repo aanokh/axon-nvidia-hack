@@ -177,6 +177,9 @@ quiz_prompt = PromptTemplate.from_template(
     {input}
 
     Please return a JSON object matching the QuizSet schema.
+
+    Important: for your latex, use single dollar signs $...$ for inline equations and
+    use double dollar signs $$..$$ for standalone equations!!! Don't use anything else!!
     """
 )
 

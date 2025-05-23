@@ -237,6 +237,33 @@ export function MainContent() {
       setIsViewingChatbot(true)
     }
 
+    const handleCourseCreated = (event: CustomEvent) => {
+      const { course, shouldSelect } = event.detail
+
+      if (shouldSelect) {
+        // Immediately set the active course data
+        setActiveCourseId(course.id)
+        setActiveCourse(course)
+
+        // Set default tab
+        if (course.isAiGenerated) {
+          setActiveTab("learn")
+        } else {
+          setActiveTab("practice")
+        }
+
+        // Ensure we exit all special views
+        setIsCreatingCourse(false)
+        setIsViewingLearningPlan(false)
+        setIsGeneratingFlashcards(false)
+        setIsViewingProfile(false)
+        setIsViewingChatbot(false)
+        setIsGeneratingQuiz(false)
+        setIsGeneratingStudyGuide(false)
+        setIsGeneratingFormula(false)
+      }
+    }
+
     window.addEventListener("course-changed", handleCourseChange as EventListener)
     window.addEventListener("create-course", handleCreateCourse as EventListener)
     window.addEventListener("cancel-create-course", handleCancelCreateCourse as EventListener)
@@ -257,6 +284,7 @@ export function MainContent() {
     window.addEventListener("generate-formula", handleFormulaGenerator as EventListener)
     window.addEventListener("cancel-formula-generator", handleCancelFormulaGenerator as EventListener)
     window.addEventListener("view-chatbot-with-message", handleChatbotViewWithMessage as EventListener)
+    window.addEventListener("course-created", handleCourseCreated as EventListener)
 
     return () => {
       window.removeEventListener("course-changed", handleCourseChange as EventListener)
@@ -279,6 +307,7 @@ export function MainContent() {
       window.removeEventListener("generate-formula", handleFormulaGenerator as EventListener)
       window.removeEventListener("cancel-formula-generator", handleCancelFormulaGenerator as EventListener)
       window.removeEventListener("view-chatbot-with-message", handleChatbotViewWithMessage as EventListener)
+      window.removeEventListener("course-created", handleCourseCreated as EventListener)
     }
   }, [courses])
 

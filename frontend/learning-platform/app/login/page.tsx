@@ -102,11 +102,6 @@ export default function LoginPage() {
                 className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              <p>Demo credentials:</p>
-              <p>Email: user@example.com</p>
-              <p>Password: password</p>
-            </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <Button

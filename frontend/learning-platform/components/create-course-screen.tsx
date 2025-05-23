@@ -215,18 +215,18 @@ export function CreateCourseScreen() {
         // Wait a moment before closing
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        // Replace this line:
-        // window.dispatchEvent(new CustomEvent("refresh-and-select-course", {
-        //   detail: { courseId: newCourseId },
-        // }))
+        // Store the course data for immediate use
+        window.dispatchEvent(
+          new CustomEvent("course-created", {
+            detail: {
+              course: data.course,
+              shouldSelect: true,
+            },
+          }),
+        )
 
-        // With this more explicit approach:
-        // First, dispatch an event to refresh courses
+        // Refresh courses list
         window.dispatchEvent(new CustomEvent("refresh-courses"))
-        // Then, after a small delay to ensure courses are loaded, dispatch the course selection event
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("course-changed", { detail: data.course.id }))
-        }, 100)
 
         // Return to main view
         window.dispatchEvent(new CustomEvent("cancel-create-course"))
