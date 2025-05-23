@@ -5,8 +5,6 @@ import { ArrowLeft, BookOpen, FileText, Sparkles, CheckCircle2, Circle, Info, Li
 import { Button } from "@/components/ui/button"
 import "katex/dist/katex.min.css"
 import { InlineMath, BlockMath } from "react-katex"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 
 // Types for course data
 type Topic = {
@@ -192,6 +190,8 @@ export function FormulaGenerator() {
           courseId,
           topics: selectedTopics,
           prompt: customPrompt,
+          // Add a format instruction for the backend
+          formatInstructions: "Use $...$ for inline LaTeX and $$...$$$ for block LaTeX equations.",
         }),
       })
 
@@ -230,15 +230,16 @@ export function FormulaGenerator() {
     setFormulaSheet(null)
   }
 
-  // Function to render text with LaTeX
+  // Simple function to render text with LaTeX
   const renderTextWithLatex = (text: string): ReactNode[] => {
     if (!text) return [null]
 
-    // Split text by LaTeX delimiters and render accordingly
+    // Only split by $...$ and $$...$$ delimiters
     const parts = text.split(/(\$\$.*?\$\$|\$.*?\$)/gs)
+
     return parts.map((part, index) => {
+      // Handle block math with double dollar signs: $$...$$
       if (part.startsWith("$$") && part.endsWith("$$")) {
-        // Block math
         try {
           return <BlockMath key={index} math={part.slice(2, -2)} />
         } catch (error) {
@@ -249,8 +250,9 @@ export function FormulaGenerator() {
             </span>
           )
         }
-      } else if (part.startsWith("$") && part.endsWith("$")) {
-        // Inline math
+      }
+      // Handle inline math with single dollar signs: $...$
+      else if (part.startsWith("$") && part.endsWith("$")) {
         try {
           return <InlineMath key={index} math={part.slice(1, -1)} />
         } catch (error) {
@@ -261,7 +263,9 @@ export function FormulaGenerator() {
             </span>
           )
         }
-      } else {
+      }
+      // Regular text
+      else {
         return <span key={index}>{part}</span>
       }
     })
@@ -300,38 +304,7 @@ export function FormulaGenerator() {
           {/* Formula Sheet Content */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-8">
             <div className="prose prose-lg max-w-none dark:prose-invert">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  p: ({ children }) => <p>{renderTextWithLatex(String(children))}</p>,
-                  li: ({ children }) => <li>{renderTextWithLatex(String(children))}</li>,
-                  h1: ({ children }) => <h1 className="text-3xl font-bold mt-6 mb-4">{children}</h1>,
-                  h2: ({ children }) => <h2 className="text-2xl font-bold mt-5 mb-3">{children}</h2>,
-                  h3: ({ children }) => <h3 className="text-xl font-bold mt-4 mb-2">{children}</h3>,
-                  table: ({ children }) => (
-                    <div className="overflow-x-auto my-6">
-                      <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-700">
-                        {children}
-                      </table>
-                    </div>
-                  ),
-                  thead: ({ children }) => <thead className="bg-gray-100 dark:bg-gray-800">{children}</thead>,
-                  tbody: ({ children }) => <tbody>{children}</tbody>,
-                  tr: ({ children }) => <tr className="border-b border-gray-300 dark:border-gray-700">{children}</tr>,
-                  th: ({ children }) => (
-                    <th className="border border-gray-300 dark:border-gray-700 px-4 py-2 text-left font-semibold">
-                      {renderTextWithLatex(String(children))}
-                    </th>
-                  ),
-                  td: ({ children }) => (
-                    <td className="border border-gray-300 dark:border-gray-700 px-4 py-2">
-                      {renderTextWithLatex(String(children))}
-                    </td>
-                  ),
-                }}
-              >
-                {formulaSheet}
-              </ReactMarkdown>
+              <div className="whitespace-pre-line">{renderTextWithLatex(formulaSheet || "")}</div>
             </div>
           </div>
         </div>

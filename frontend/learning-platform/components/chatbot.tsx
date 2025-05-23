@@ -7,11 +7,10 @@ import { Send, ArrowLeft, User, Bot } from "lucide-react"
 import "katex/dist/katex.min.css"
 import { InlineMath, BlockMath } from "react-katex"
 
+// Update the Message type to the simplified schema
 type Message = {
-  id: string
-  content: string
   role: "user" | "assistant"
-  timestamp: Date
+  content: string
 }
 
 interface ChatbotProps {
@@ -23,22 +22,26 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Fetch chat history (previous messages) on component mount
   useEffect(() => {
     const fetchChatHistory = async () => {
+      setIsLoadingHistory(true)
       try {
-        // This would be replaced with an actual API call
-        // const response = await fetch(`/api/chat/history?courseId=${courseId}`)
-        // const data = await response.json()
-        // setMessages(data.messages)
+        // Call the actual history API route
+        const response = await fetch(`/api/chat/history?courseId=${courseId}`)
 
-        // For now, start with an empty chat
-        setMessages([])
+        if (!response.ok) {
+          throw new Error("Failed to fetch chat history")
+        }
 
-        // Check for initial message from localStorage
+        const data = await response.json()
+        setMessages(data.messages || [])
+
+        // Check for initial message from localStorage after loading history
         const initialMessage = localStorage.getItem("chatbotInitialMessage")
         if (initialMessage) {
           // Clear the stored message
@@ -56,6 +59,10 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
         }
       } catch (error) {
         console.error("Error fetching chat history:", error)
+        // Start with empty messages if history fetch fails
+        setMessages([])
+      } finally {
+        setIsLoadingHistory(false)
       }
     }
 
@@ -67,21 +74,22 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Focus input on mount
+  // Focus input on mount after history is loaded
   useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+    if (!isLoadingHistory) {
+      inputRef.current?.focus()
+    }
+  }, [isLoadingHistory])
 
+  // Update the handleSendMessage function to call the API route
   const handleSendMessage = async () => {
     const messageToSend = input.trim()
     if (!messageToSend) return
 
-    // Create a new user message
+    // Create a new user message with simplified schema
     const userMessage: Message = {
-      id: Date.now().toString(),
-      content: messageToSend,
       role: "user",
-      timestamp: new Date(),
+      content: messageToSend,
     }
 
     // Add user message to state
@@ -94,21 +102,36 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
     setIsLoading(true)
 
     try {
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      // Call the actual API route
+      const response = await fetch("/api/chat/message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: messageToSend,
+          courseId: courseId,
+        }),
+      })
 
-      // Create dummy response with LaTeX example
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: generateResponseWithLatex(messageToSend, courseName, courseId),
-        role: "assistant",
-        timestamp: new Date(),
+      if (!response.ok) {
+        throw new Error("Failed to send message")
       }
 
+      const data = await response.json()
+
       // Add bot message to state
-      setMessages((prev) => [...prev, botMessage])
+      setMessages((prev) => [...prev, data.message])
     } catch (error) {
       console.error("Error sending message:", error)
+      // Add error message
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, there was an error processing your message. Please try again.",
+        },
+      ])
     } finally {
       setIsLoading(false)
     }
@@ -128,43 +151,6 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
-
-  // Function to generate a response with LaTeX examples
-  const generateResponseWithLatex = (userInput: string, courseName: string, courseId: string) => {
-    // Check if the message contains math-related keywords
-    const mathKeywords = [
-      "math",
-      "equation",
-      "formula",
-      "calculus",
-      "derivative",
-      "integral",
-      "algebra",
-      "function",
-      "graph",
-      "solve",
-    ]
-
-    const hasMathKeyword = mathKeywords.some((keyword) => userInput.toLowerCase().includes(keyword))
-
-    if (hasMathKeyword) {
-      // Return a response with LaTeX examples
-      return `Here's an example of the math concept you asked about for course "${courseName}":
-
-The quadratic formula is $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$ for the equation $ax^2 + bx + c = 0$.
-
-For calculus, the power rule for derivatives is:
-$$\\frac{d}{dx}[x^n] = nx^{n-1}$$
-
-And the product rule is:
-$$\\frac{d}{dx}[f(x)g(x)] = f(x)\\frac{d}{dx}[g(x)] + g(x)\\frac{d}{dx}[f(x)]$$
-
-Let me know if you need more examples or have specific questions!`
-    }
-
-    // Default response
-    return `This is a response to your message about course "${courseName}" (ID: ${courseId}): "${userInput}"`
   }
 
   // Function to render text with LaTeX
@@ -219,7 +205,17 @@ Let me know if you need more examples or have specific questions!`
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 ? (
+          {isLoadingHistory ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8">
+              <div className="w-16 h-16 bg-[#8a2432] dark:bg-purple-700 rounded-full flex items-center justify-center mb-4">
+                <Bot className="w-8 h-8 text-white animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Loading chat history...</h2>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                Please wait while we load your previous conversations.
+              </p>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8">
               <div className="w-16 h-16 bg-[#8a2432] dark:bg-purple-700 rounded-full flex items-center justify-center mb-4">
                 <Bot className="w-8 h-8 text-white" />
@@ -230,8 +226,10 @@ Let me know if you need more examples or have specific questions!`
               </p>
             </div>
           ) : (
-            messages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+            // Update the message rendering in the Messages section to use the simplified schema
+            // Replace the messages.map section with:
+            messages.map((message, index) => (
+              <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[80%] rounded-lg p-4 ${
                     message.role === "user"
@@ -244,7 +242,6 @@ Let me know if you need more examples or have specific questions!`
                       {message.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                     </div>
                     <span className="font-medium">{message.role === "user" ? "You" : "Assistant"}</span>
-                    <span className="text-xs opacity-70 ml-auto">{formatTime(message.timestamp)}</span>
                   </div>
                   <div className="whitespace-pre-wrap">{renderTextWithLatex(message.content)}</div>
                 </div>
@@ -292,10 +289,11 @@ Let me know if you need more examples or have specific questions!`
                 className="w-full p-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#8a2432] dark:focus:ring-purple-700 focus:outline-none resize-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-colors duration-200"
                 rows={1}
                 style={{ minHeight: "60px", maxHeight: "200px" }}
+                disabled={isLoadingHistory}
               />
               <button
                 onClick={handleSendMessage}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || isLoadingHistory}
                 className="absolute right-3 bottom-3 p-2 rounded-full bg-[#8a2432] dark:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-[#732232] dark:hover:bg-purple-600"
               >
                 <Send className="w-4 h-4" />

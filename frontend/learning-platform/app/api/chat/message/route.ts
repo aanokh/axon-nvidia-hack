@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "../../auth/[...nextauth]/route"
 
 /**
  * POST /api/chat/message
@@ -16,22 +18,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Course ID is required" }, { status: 400 })
     }
 
-    // In a real implementation, you would:
-    // 1. Get the user ID from the session
-    // 2. Save the user message to the database with the courseId
-    // 3. Send the message to an AI service with context about the course
-    // 4. Save the AI response to the database
-    // 5. Return the AI response
+    // Get the current user's session
+    const session = await getServerSession(authOptions)
 
-    // Simulate processing delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Check if the user is authenticated
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
-    // Dummy response
+    // Get the user ID from the session
+    const userId = session.user.id
+
+    const fetchResponse = await fetch('http://localhost:8000/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        course_id: courseId,
+        user_query: message
+      }),
+    });
+    
+    if (!fetchResponse.ok) throw new Error(`Request failed: ${fetchResponse.status}`);
+    
+    const result = await fetchResponse.json();
+    console.log(JSON.stringify(result));
+
+    const text = result.result
+
+    // Simplified response format
     const response = {
-      id: Date.now().toString(),
-      content: `This is a dummy response to your message about course ID ${courseId}: "${message}"`,
       role: "assistant",
-      timestamp: new Date(),
+      content: text,
     }
 
     return NextResponse.json({ message: response })

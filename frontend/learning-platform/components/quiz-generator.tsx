@@ -80,12 +80,26 @@ const quizTemplates = [
   },
 ]
 
+// Updated type for the new schema
 type QuizQuestion = {
+  question: string
+  correctOption: string
+  wrongOptionOne: string
+  wrongSuggestionOne: string
+  wrongOptionTwo: string
+  wrongSuggestionTwo: string
+  wrongOptionThree: string
+  wrongSuggestionThree: string
+}
+
+// Internal type for shuffled questions
+type ShuffledQuizQuestion = {
   id: string
   question: string
   options: {
     text: string
     feedback: string
+    isCorrect: boolean
   }[]
   correctOptionIndex: number
 }
@@ -109,8 +123,8 @@ export function QuizGenerator() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
 
-  // State for generated quiz
-  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null)
+  // State for generated quiz (using shuffled format internally)
+  const [quizQuestions, setQuizQuestions] = useState<ShuffledQuizQuestion[] | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({})
   const [showFeedback, setShowFeedback] = useState<string | null>(null)
@@ -121,6 +135,33 @@ export function QuizGenerator() {
 
   // Add this after the other state declarations
   const [isShowingChatbot, setIsShowingChatbot] = useState(false)
+
+  // Function to shuffle options and create internal format
+  const shuffleQuestionOptions = (question: QuizQuestion, questionIndex: number): ShuffledQuizQuestion => {
+    const options = [
+      { text: question.correctOption, feedback: "", isCorrect: true },
+      { text: question.wrongOptionOne, feedback: question.wrongSuggestionOne, isCorrect: false },
+      { text: question.wrongOptionTwo, feedback: question.wrongSuggestionTwo, isCorrect: false },
+      { text: question.wrongOptionThree, feedback: question.wrongSuggestionThree, isCorrect: false },
+    ]
+
+    // Shuffle options using a deterministic approach based on question index
+    const shuffled = [...options]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = (questionIndex * 7 + i * 3) % (i + 1)
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+
+    // Find the correct option index after shuffling
+    const correctOptionIndex = shuffled.findIndex((option) => option.isCorrect)
+
+    return {
+      id: `q-${questionIndex + 1}`,
+      question: question.question,
+      options: shuffled,
+      correctOptionIndex,
+    }
+  }
 
   // Fetch course data from API
   useEffect(() => {
@@ -248,9 +289,14 @@ export function QuizGenerator() {
       const data = await response.json()
 
       if (data.success) {
+        // Convert the new schema to internal format with shuffled options
+        const shuffledQuestions = data.questions.map((q: QuizQuestion, index: number) =>
+          shuffleQuestionOptions(q, index),
+        )
+
         // Short delay to show 100% before displaying results
         setTimeout(() => {
-          setQuizQuestions(data.questions)
+          setQuizQuestions(shuffledQuestions)
           setCurrentQuestionIndex(0)
           setSelectedAnswers({})
           setShowFeedback(null)

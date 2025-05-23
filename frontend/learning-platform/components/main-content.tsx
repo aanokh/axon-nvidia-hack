@@ -372,9 +372,13 @@ export function MainContent() {
     return <QuizGenerator />
   }
 
-  // Add this condition before the return statement, after the isGeneratingQuiz check
+  // Update the isViewingChatbot condition to pass the courseId and courseName
   if (isViewingChatbot) {
-    return <Chatbot />
+    // Get courseId and courseName from localStorage or use active course
+    const chatbotCourseId = localStorage.getItem("chatbotCourseId") || activeCourseId?.toString() || ""
+    const chatbotCourseName = localStorage.getItem("chatbotCourseName") || activeCourse?.name || "Course"
+
+    return <Chatbot courseId={chatbotCourseId} courseName={chatbotCourseName} />
   }
 
   if (isGeneratingStudyGuide) {

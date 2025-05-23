@@ -1,5 +1,66 @@
 from langchain.prompts import PromptTemplate
 
+latex_format_instructions = r"""
+Basic Latex Format Rules
+
+Inline Equations: Use single dollar signs $...$ for inline equations
+Example: The formula for kinetic energy is $E_k = \frac12mv^2$
+
+Block Equations: Use double dollar signs $$...$$ for standalone equations
+Example: The quadratic formula is:
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+
+Common LaTeX Commands
+
+Fractions: \frac{numerator}{denominator}
+Example: \frac{1}{2} renders as ½
+
+Square Roots: \sqrt{expression}
+Example: \sqrt{x^2 + y^2} renders as √(x² + y²)
+
+Superscripts: Use ^ for exponents
+Example: E = mc^2
+
+Subscripts: Use _ for subscripts
+Example: H_2O
+
+Greek Letters: Use \ followed by the letter name
+Example: \alpha, \beta, \gamma, \omega
+
+Example Formulas
+
+Hooke's Law:
+F = -kx
+
+F: Force on spring
+
+k: Spring constant
+
+x: Displacement
+
+Oscillatory Motion:
+x(t) = A cos(ω t + φ)
+
+A: Amplitude
+
+ω: Angular frequency (ω = √(k/m))
+
+φ: Phase constant
+
+Period of a Mass-Spring System:
+T = 2π √(m/k)
+
+Period of a Simple Pendulum:
+T = 2π √(l/g)
+
+l: Length of pendulum
+
+g: Acceleration due to gravity
+
+Damped Oscillations:
+x(t) = A e^(-bt/(2m)) cos(ω′ t + φ)
+"""
+
 lp_new_prompt = PromptTemplate.from_template(
     """You are an academic assistant helping to build a structured learning plan for a student.
     Based on the content extracted from the provided course PDFs (syllabi, outlines, lecture notes, and other materials),
@@ -116,6 +177,24 @@ quiz_prompt = PromptTemplate.from_template(
     """
 )
 
+qa_prompt = PromptTemplate.from_template(
+    """You are a professor with 30 years of experience. Your task is to answer a students question based on
+    the materials provided and previous chat history. You will be given the user request, history, and some relevant context snippets
+    from relevant lecture transcripts and book materials that you should use for your answer.
+    
+    Be nice, helpful, and explain on an undergraduate university level.
+
+    The previous chat history is:
+    {history}
+
+    Here are some relevant snippets you can support your thought process with:
+    {context}
+
+    The user's request is:
+    {input}
+    """
+)
+
 formula_prompt = PromptTemplate.from_template(
     """You are a professor with 30 years of experience. Your task is to generate a useful formula sheet for your student
     based on the materials provided. You will be given one or more topics, a user request, and some context snippets
@@ -126,7 +205,7 @@ formula_prompt = PromptTemplate.from_template(
     Your sheet should prepare the student for an exam! Don't write too much text unless needed,
     focus on making it like a formula sheet with more formulas, and be as concise as posisble, space is valuable here!
 
-    Output your answer in markdown and you can also use latex. Aim for around half to one page though
+    DO NOT use markdown! You can use latex though. Aim for around half to one page though
     it can change depending on the query.
 
     Your topic(s) you should cover are: {topics}
@@ -138,7 +217,12 @@ formula_prompt = PromptTemplate.from_template(
     {input}
 
     Please return a JSON object matching the FormulaSheet schema.
+
+    Do not use ** for bold.
     """
+    #When using latex, make sure to follow the following instructions and nothing else!
+    #"""
+    #+ f"{latex_format_instructions}"
 )
 
 study_prompt = PromptTemplate.from_template(
@@ -150,7 +234,7 @@ study_prompt = PromptTemplate.from_template(
     so they can use it to prepare for an exam. This is not a formula sheet, you don't need to show formulas!
     Just make a conceptual map to help the student prepare.
     
-    Output your answer in markdown and you can also use latex. Aim for around one to two pages though
+    DO NOT use markdown! You can use latex though. Aim for around one to two pages though
     it can change depending on the query.
 
     Your topic(s) you should cover are: {topics}
@@ -162,7 +246,12 @@ study_prompt = PromptTemplate.from_template(
     {input}
 
     Please return a JSON object matching the StudyGuide schema.
+
+    Do not use ** for bold.
     """
+    #When using latex, make sure to follow the following instructions and nothing else!
+    #"""
+    #+ f"{latex_format_instructions}"
 )
 
 tag_file_prompt = PromptTemplate.from_template(

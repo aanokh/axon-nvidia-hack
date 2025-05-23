@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "../../auth/[...nextauth]/route"
 
 // This is a dummy API route that simulates generating quiz questions
 // In a real implementation, this would connect to an AI service or database
 
 export async function POST(request: Request) {
   try {
+
+    // Get the current user's session
+    const session = await getServerSession(authOptions)
+
+    // Check if the user is authenticated
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Get the user ID from the session
+    const userId = session.user.id
+
     // Parse the request body
     const body = await request.json()
     const { courseId, topics, prompt } = body
@@ -18,6 +32,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Course ID is required" }, { status: 400 })
     }
 
+    const response = await fetch('http://localhost:8000/generate-quiz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        course_id: courseId,
+        user_query: prompt,
+        topic_names: topics
+      }),
+    });
+    
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    
+    const result = await response.json();
+    console.log(JSON.stringify(result));
+
+    //const flashcards: { question: string; answer: string }[] = result.result.flashcards.map(
+    //  ({ question, answer }: { question: string; answer: string }) => ({
+    //    question,
+    //    answer,
+    //  })
+    //)
+
     // In a real implementation, we would fetch course-specific data
     // For now, we'll simulate this by using the courseId in our mock data
 
@@ -25,7 +62,8 @@ export async function POST(request: Request) {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Generate quiz questions based on the topics and courseId
-    const questions = generateQuizQuestions(courseId, topics, prompt)
+    //const questions = generateQuizQuestions(courseId, topics, prompt)
+    const questions = result.result.questions;
 
     return NextResponse.json({
       success: true,
@@ -50,8 +88,8 @@ function generateQuizQuestions(courseId: string, topics: string[], prompt: strin
 
   // Use courseId to seed the random number generator for consistent results per course
   const courseIdNum = Number.parseInt(courseId, 10) || 1
-  const seedRandom = (max: number) => {
-    return Math.floor((((courseIdNum * 9301 + 49297) % 233280) / 233280) * max)
+  const seedRandom = (max: number, seed = 0) => {
+    return Math.floor((((courseIdNum * 9301 + 49297 + seed) % 233280) / 233280) * max)
   }
 
   // Question generation strategies with more complex LaTeX
@@ -89,33 +127,27 @@ function generateQuizQuestions(courseId: string, topics: string[], prompt: strin
     const topic = topics[i % topics.length]
 
     // Increase chance of math questions to test LaTeX (70% chance for math)
-    const useMath = (seedRandom(100) + i) % 100 < 70
+    const useMath = (seedRandom(100, i) + i) % 100 < 70
     const strategies = useMath ? mathQuestionStrategies : questionStrategies
 
     // Select a strategy based on courseId and index for consistency
-    const strategyIndex = (seedRandom(strategies.length) + i) % strategies.length
+    const strategyIndex = (seedRandom(strategies.length, i) + i) % strategies.length
     const strategy = strategies[strategyIndex]
     const question = strategy(topic)
 
-    // Generate 4 options with one correct answer
-    const correctOptionIndex = (seedRandom(4) + i) % 4
-    const options = generateTopicSpecificOptions(topic, correctOptionIndex, useMath, courseIdNum + i)
+    // Generate options using the new schema
+    const questionData = generateQuestionWithNewSchema(topic, question, useMath, courseIdNum + i)
 
-    questions.push({
-      id: `q-${courseId}-${i + 1}`,
-      question,
-      options,
-      correctOptionIndex,
-    })
+    questions.push(questionData)
   }
 
   return questions
 }
 
-// Helper function to generate topic-specific options
-function generateTopicSpecificOptions(topic: string, correctIndex: number, isMath: boolean, seed: number) {
+// Helper function to generate questions with the new schema
+function generateQuestionWithNewSchema(topic: string, question: string, isMath: boolean, seed: number) {
   if (isMath) {
-    return generateMathOptions(correctIndex, seed)
+    return generateMathQuestionNewSchema(question, seed)
   }
 
   // Generate topic-specific options
@@ -138,154 +170,162 @@ function generateTopicSpecificOptions(topic: string, correctIndex: number, isMat
     `A contradictory principle`,
   ]
 
-  // Create options array
-  const options = []
+  const wrongSuggestions = [
+    `This is not correct. Focus on the core concepts and principles of ${topic}.`,
+    `This answer doesn't capture the main idea. Review the fundamental aspects of ${topic}.`,
+    `While this might seem related, it's not the primary focus of ${topic}.`,
+    `This is a common misconception. Study the key characteristics of ${topic} more carefully.`,
+    `This approach is outdated. Modern understanding of ${topic} has evolved.`,
+    `This is too narrow a view. ${topic} encompasses broader concepts.`,
+    `This misses the essential nature of ${topic}. Review the core principles.`,
+    `This contradicts the established understanding of ${topic}.`,
+  ]
 
-  // Add correct answer at the specified index
-  const correctAnswer = correctAnswers[seed % correctAnswers.length]
+  // Select correct answer and wrong answers
+  const correctOption = correctAnswers[seed % correctAnswers.length]
 
-  // Add wrong answers for other positions
-  // Use seed to deterministically shuffle
+  // Use seed to deterministically select wrong answers
   const shuffledWrongAnswers = [...wrongAnswers].sort((a, b) => {
     return ((seed * 9301 + 49297) % 233280) / 233280 - 0.5
   })
 
-  for (let i = 0; i < 4; i++) {
-    if (i === correctIndex) {
-      options.push({
-        text: correctAnswer,
-        feedback: "",
-      })
-    } else {
-      options.push({
-        text: shuffledWrongAnswers[i % shuffledWrongAnswers.length],
-        feedback: `This is not correct. Focus on the core concepts and principles of ${topic}.`,
-      })
-    }
-  }
+  const shuffledWrongSuggestions = [...wrongSuggestions].sort((a, b) => {
+    return ((seed * 7919 + 65537) % 233280) / 233280 - 0.5
+  })
 
-  return options
+  return {
+    question,
+    correctOption,
+    wrongOptionOne: shuffledWrongAnswers[0],
+    wrongSuggestionOne: shuffledWrongSuggestions[0],
+    wrongOptionTwo: shuffledWrongAnswers[1],
+    wrongSuggestionTwo: shuffledWrongSuggestions[1],
+    wrongOptionThree: shuffledWrongAnswers[2],
+    wrongSuggestionThree: shuffledWrongSuggestions[2],
+  }
 }
 
-// Helper function to generate math-specific options with LaTeX
-function generateMathOptions(correctIndex: number, seed: number) {
-  const mathOptionSets = [
+// Helper function to generate math-specific questions with the new schema
+function generateMathQuestionNewSchema(question: string, seed: number) {
+  const mathQuestionSets = [
     {
-      options: ["$2x + 3$", "$x^2 + 3x$", "$2x + 2$", "$x + 3$"],
-      feedbacks: [
-        "",
+      correctOption: "$2x + 3$",
+      wrongOptionOne: "$x^2 + 3x$",
+      wrongSuggestionOne:
         "Remember the power rule: the derivative of $x^n$ is $nx^{n-1}$. Also, the derivative of a constant is 0.",
-        "You're close! Check the derivative of the constant term.",
-        "Review the power rule for derivatives. The derivative of $x^2$ is $2x$, not $x$.",
-      ],
+      wrongOptionTwo: "$2x + 2$",
+      wrongSuggestionTwo: "You're close! Check the derivative of the constant term.",
+      wrongOptionThree: "$x + 3$",
+      wrongSuggestionThree: "Review the power rule for derivatives. The derivative of $x^2$ is $2x$, not $x$.",
     },
     {
-      options: ["$4$", "$8$", "$16/3$", "$12$"],
-      feedbacks: [
-        "",
-        "Remember to apply the power rule for integration: $\\int x^n dx = \\frac{x^{n+1}}{n+1}$.",
-        "You're close, but check your calculation again.",
-        "This would be the result if the limits were different. Check your integration.",
-      ],
+      correctOption: "$4$",
+      wrongOptionOne: "$8$",
+      wrongSuggestionOne: "Remember to apply the power rule for integration: $\\int x^n dx = \\frac{x^{n+1}}{n+1}$.",
+      wrongOptionTwo: "$16/3$",
+      wrongSuggestionTwo: "You're close, but check your calculation again.",
+      wrongOptionThree: "$12$",
+      wrongSuggestionThree: "This would be the result if the limits were different. Check your integration.",
     },
     {
-      options: ["$x = \\pm 2$", "$x = 2$", "$x = \\pm 4$", "$x = 4$"],
-      feedbacks: [
-        "",
-        "Remember to consider both positive and negative solutions when taking the square root.",
-        "You need to divide by 3 after taking the square root of 12.",
-        "You need to take the square root of 12, not just divide by 3.",
-      ],
+      correctOption: "$x = \\pm 2$",
+      wrongOptionOne: "$x = 2$",
+      wrongSuggestionOne: "Remember to consider both positive and negative solutions when taking the square root.",
+      wrongOptionTwo: "$x = \\pm 4$",
+      wrongSuggestionTwo: "You need to divide by 3 after taking the square root of 12.",
+      wrongOptionThree: "$x = 4$",
+      wrongSuggestionThree: "You need to take the square root of 12, not just divide by 3.",
     },
     {
-      options: ["$2$", "$6$", "$10$", "$-2$"],
-      feedbacks: [
-        "",
+      correctOption: "$2$",
+      wrongOptionOne: "$6$",
+      wrongSuggestionOne:
         "Remember that the dot product is calculated as $\\vec{a} \\cdot \\vec{b} = a_1b_1 + a_2b_2$.",
-        "You might have calculated $3 \\cdot 2 + 4 \\cdot (-1)$ incorrectly.",
-        "Check the sign in your calculation. The dot product can be positive or negative.",
-      ],
+      wrongOptionTwo: "$10$",
+      wrongSuggestionTwo: "You might have calculated $3 \\cdot 2 + 4 \\cdot (-1)$ incorrectly.",
+      wrongOptionThree: "$-2$",
+      wrongSuggestionThree: "Check the sign in your calculation. The dot product can be positive or negative.",
     },
     {
-      options: ["$(2, 0)$", "$(3, 1)$", "$(2, 1)$", "$(3, -1)$"],
-      feedbacks: [
-        "",
-        "Try substituting your answer back into both equations to verify.",
-        "You're close! Double-check your arithmetic when solving the system.",
-        "Make sure you're solving for x and y correctly. Try the substitution method.",
-      ],
+      correctOption: "$(2, 0)$",
+      wrongOptionOne: "$(3, 1)$",
+      wrongSuggestionOne: "Try substituting your answer back into both equations to verify.",
+      wrongOptionTwo: "$(2, 1)$",
+      wrongSuggestionTwo: "You're close! Double-check your arithmetic when solving the system.",
+      wrongOptionThree: "$(3, -1)$",
+      wrongSuggestionThree: "Make sure you're solving for x and y correctly. Try the substitution method.",
     },
     {
-      options: ["$3$", "$\\infty$", "$0$", "$1$"],
-      feedbacks: [
-        "",
-        "When evaluating limits as x approaches infinity, focus on the highest power terms.",
-        "The limit is finite. Divide both numerator and denominator by the highest power of x.",
-        "You're close! Divide both the numerator and denominator by x² and simplify.",
-      ],
+      correctOption: "$3$",
+      wrongOptionOne: "$\\infty$",
+      wrongSuggestionOne: "When evaluating limits as x approaches infinity, focus on the highest power terms.",
+      wrongOptionTwo: "$0$",
+      wrongSuggestionTwo: "The limit is finite. Divide both numerator and denominator by the highest power of x.",
+      wrongOptionThree: "$1$",
+      wrongSuggestionThree: "You're close! Divide both the numerator and denominator by x² and simplify.",
     },
     {
-      options: ["$0.12$", "$0.7$", "$0.3$", "$0.1$"],
-      feedbacks: [
-        "",
-        "For independent events, $P(A \\cap B) = P(A) \\times P(B)$.",
-        "This is just $P(A)$, not $P(A \\cap B)$.",
-        "Check your multiplication: $0.3 \\times 0.4 = 0.12$.",
-      ],
+      correctOption: "$0.12$",
+      wrongOptionOne: "$0.7$",
+      wrongSuggestionOne: "For independent events, $P(A \\cap B) = P(A) \\times P(B)$.",
+      wrongOptionTwo: "$0.3$",
+      wrongSuggestionTwo: "This is just $P(A)$, not $P(A \\cap B)$.",
+      wrongOptionThree: "$0.1$",
+      wrongSuggestionThree: "Check your multiplication: $0.3 \\times 0.4 = 0.12$.",
     },
     {
-      options: ["$55$", "$15$", "$30$", "$25$"],
-      feedbacks: [
-        "",
-        "Remember that $\\sum_{i=1}^5 i^2 = 1^2 + 2^2 + 3^2 + 4^2 + 5^2$.",
-        "You might have calculated $\\sum_{i=1}^5 i$ instead of $\\sum_{i=1}^5 i^2$.",
-        "You're missing some terms. Make sure to include all five squared terms.",
-      ],
+      correctOption: "$55$",
+      wrongOptionOne: "$15$",
+      wrongSuggestionOne: "Remember that $\\sum_{i=1}^5 i^2 = 1^2 + 2^2 + 3^2 + 4^2 + 5^2$.",
+      wrongOptionTwo: "$30$",
+      wrongSuggestionTwo: "You might have calculated $\\sum_{i=1}^5 i$ instead of $\\sum_{i=1}^5 i^2$.",
+      wrongOptionThree: "$25$",
+      wrongSuggestionThree: "You're missing some terms. Make sure to include all five squared terms.",
     },
     {
-      options: ["$2e^{2x}\\sin(x) + e^{2x}\\cos(x)$", "$e^{2x}\\sin(x)$", "$e^{2x}\\cos(x)$", "$2e^{2x}\\cos(x)$"],
-      feedbacks: [
-        "",
-        "Remember to apply the product rule: $(f \\cdot g)' = f' \\cdot g + f \\cdot g'$.",
-        "You've only calculated part of the derivative. Don't forget the product rule.",
-        "You've missed the term with $\\sin(x)$. Apply the product rule correctly.",
-      ],
+      correctOption: "$2e^{2x}\\sin(x) + e^{2x}\\cos(x)$",
+      wrongOptionOne: "$e^{2x}\\sin(x)$",
+      wrongSuggestionOne: "Remember to apply the product rule: $(f \\cdot g)' = f' \\cdot g + f \\cdot g'$.",
+      wrongOptionTwo: "$e^{2x}\\cos(x)$",
+      wrongSuggestionTwo: "You've only calculated part of the derivative. Don't forget the product rule.",
+      wrongOptionThree: "$2e^{2x}\\cos(x)$",
+      wrongSuggestionThree: "You've missed the term with $\\sin(x)$. Apply the product rule correctly.",
     },
     {
-      options: ["$2$ and $4$", "$4$ and $2$", "$3 + \\sqrt{2}$ and $3 - \\sqrt{2}$", "$\\sqrt{2}$ and $-\\sqrt{2}$"],
-      feedbacks: [
-        "",
+      correctOption: "$2$ and $4$",
+      wrongOptionOne: "$4$ and $2$",
+      wrongSuggestionOne:
         "The eigenvalues are the solutions to the characteristic equation $\\det(A - \\lambda I) = 0$.",
-        "You're close! The characteristic equation is $(3-\\lambda)^2 - 1 = 0$.",
-        "These would be the eigenvalues of a different matrix. Check your calculations.",
-      ],
+      wrongOptionTwo: "$3 + \\sqrt{2}$ and $3 - \\sqrt{2}$",
+      wrongSuggestionTwo: "You're close! The characteristic equation is $(3-\\lambda)^2 - 1 = 0$.",
+      wrongOptionThree: "$\\sqrt{2}$ and $-\\sqrt{2}$",
+      wrongSuggestionThree: "These would be the eigenvalues of a different matrix. Check your calculations.",
     },
     {
-      options: ["$\\sqrt{2}$", "$1$", "$2$", "$\\frac{\\sqrt{2}}{2}$"],
-      feedbacks: [
-        "",
-        "Remember that $\\cos(\\pi/4) = \\sin(\\pi/4) = \\frac{\\sqrt{2}}{2}$.",
-        "You might have used the wrong angle. $\\cos(\\pi/4) + \\sin(\\pi/4) \\neq 2$.",
-        "This is just $\\cos(\\pi/4)$ or $\\sin(\\pi/4)$, not their sum.",
-      ],
+      correctOption: "$\\sqrt{2}$",
+      wrongOptionOne: "$1$",
+      wrongSuggestionOne: "Remember that $\\cos(\\pi/4) = \\sin(\\pi/4) = \\frac{\\sqrt{2}}{2}$.",
+      wrongOptionTwo: "$2$",
+      wrongSuggestionTwo: "You might have used the wrong angle. $\\cos(\\pi/4) + \\sin(\\pi/4) \\neq 2$.",
+      wrongOptionThree: "$\\frac{\\sqrt{2}}{2}$",
+      wrongSuggestionThree: "This is just $\\cos(\\pi/4)$ or $\\sin(\\pi/4)$, not their sum.",
     },
     {
-      options: ["$y = e^{x^2}$", "$y = e^x$", "$y = xe^{x^2}$", "$y = e^{-x^2}$"],
-      feedbacks: [
-        "",
-        "This is a separable differential equation. Try separating the variables and integrating.",
-        "You're close! Remember to use the initial condition $y(0) = 1$ to find the constant.",
-        "Check your integration. The solution should satisfy both the DE and initial condition.",
-      ],
+      correctOption: "$y = e^{x^2}$",
+      wrongOptionOne: "$y = e^x$",
+      wrongSuggestionOne: "This is a separable differential equation. Try separating the variables and integrating.",
+      wrongOptionTwo: "$y = xe^{x^2}$",
+      wrongSuggestionTwo: "You're close! Remember to use the initial condition $y(0) = 1$ to find the constant.",
+      wrongOptionThree: "$y = e^{-x^2}$",
+      wrongSuggestionThree: "Check your integration. The solution should satisfy both the DE and initial condition.",
     },
   ]
 
   // Select a set based on seed for consistency
-  const selectedSet = mathOptionSets[seed % mathOptionSets.length]
+  const selectedSet = mathQuestionSets[seed % mathQuestionSets.length]
 
-  // Create the options array with feedback
-  return selectedSet.options.map((text, index) => ({
-    text,
-    feedback: selectedSet.feedbacks[index],
-  }))
+  return {
+    question,
+    ...selectedSet,
+  }
 }

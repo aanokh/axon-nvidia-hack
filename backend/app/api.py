@@ -59,7 +59,7 @@ async def get_learning_plan_handler(request: Request):
 async def get_chat_history_handler(request: Request):
     request_data = await request.json()
 
-    composite_id = str(request_data["user_id"])
+    composite_id = str(request_data["user_id"]) + str(request_data["course_id"])
 
     async with boto.resource("dynamodb") as dynamodb:
         table = await dynamodb.Table('chat-history')
@@ -91,6 +91,14 @@ async def get_chat_history_handler(request: Request):
                 "status": "failure",
                 "history": None
             }
+
+@app.post("/message")
+async def message_handler(request: Request):
+    request_data = await request.json()
+
+    result = await answer_message(user_id=request_data["user_id"], course_id=request_data["course_id"], user_query=request_data["user_query"])
+
+    return {"status": "success", "result": result}
 
 @app.post("/save-learning-plan")
 async def save_learning_plan_handler(request: Request):
@@ -131,7 +139,7 @@ async def generate_flashcards_handler(request: Request):
 
     return {"status": "success", "result": result}
 
-@app.post("/generate-formulasheet")
+@app.post("/generate-formula-sheet")
 async def generate_formula_sheet_handler(request: Request):
     request_data = await request.json()
 
@@ -139,7 +147,7 @@ async def generate_formula_sheet_handler(request: Request):
 
     return {"status": "success", "result": result}
 
-@app.post("/generate-studyguide")
+@app.post("/generate-study-guide")
 async def generate_study_guide_handler(request: Request):
     request_data = await request.json()
 

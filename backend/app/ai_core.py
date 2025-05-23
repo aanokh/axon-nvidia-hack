@@ -24,6 +24,7 @@ from typing import Any
 import json
 from langchain_community.document_loaders import S3FileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from nim_retriever import *
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
@@ -53,14 +54,13 @@ class NoOpOutputParser(BaseOutputParser[Any]):
         # Return input directly, no wrapping or parsing
         return input
 
-tag_file_chain = create_stuff_documents_chain(
-    llm=llm,
-    prompt=tag_file_prompt
-)
+def convert_composite_id(composite_id: str) -> str:
+    return '_' + composite_id.replace('-', '_')
 
 async def process_syllabus(user_id, course_id, filename):
     
     s3_key = f'upload/{user_id}/{course_id}/{filename}'
+    composite_id = str(user_id) + str(course_id)
 
     loader = S3FileLoader(
         bucket="axon-main",
@@ -71,92 +71,24 @@ async def process_syllabus(user_id, course_id, filename):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     splits = splitter.split_documents(docs) # TODO async
 
-    for doc in splits:
-        doc.metadata["topic"] = ["Syllabus"]
-        doc.metadata["user_id"] = user_id
-        doc.metadata["course_id"] = int(course_id)
+    #for doc in splits:
+    #    doc.metadata["topic"] = ["Syllabus"]
+    #    doc.metadata["user_id"] = user_id
+    #    doc.metadata["course_id"] = int(course_id)
     
-    await qdrant_vs.aadd_documents(splits)
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
 
-async def ingest_with_nim_via_langchain(user_id: str, course_id: str, filename: str):
-    s3_uri = f"s3://axon-main/upload/{user_id}/{course_id}/{filename}"
-    docs: list[Document] = []
-
-    async with aiohttp.ClientSession(headers=HEADERS) as session:
-        # 1) Parse PDF → text_blocks + page_images
-        async with session.post(PARSE_URL, json={"uri": s3_uri}) as resp:
-            resp.raise_for_status()
-            parsed = await resp.json()
-
-        # convert text blocks into Documents
-        for blk in parsed["text_blocks"]:
-            docs.append(Document(
-                page_content=blk["text"],
-                metadata={
-                    "user_id": user_id,
-                    "course_id": course_id,
-                    "page": blk["page"],
-                    "type": "text_block",
-                }
-            ))
-
-        # 2) Detect regions on each page image
-        for img in parsed.get("page_images", []):
-            async with session.post(PAGEEL_URL, json={"image_uri": img["uri"]}) as r2:
-                r2.raise_for_status()
-                regions = (await r2.json())["regions"]
-
-            # 3) Extract graphic/table text as Documents
-            for reg in regions:
-                if reg["type"] == "graphic":
-                    url = GRAPHIC_URL; field = "texts"
-                elif reg["type"] == "table":
-                    url = TABLE_URL; field = "data"
-                else:
-                    continue
-
-                async with session.post(url, json={
-                    "image_uri": img["uri"],
-                    "bbox": reg["bbox"]
-                }) as r3:
-                    r3.raise_for_status()
-                    out = await r3.json()
-
-                if reg["type"] == "graphic":
-                    for t in out.get("texts", []):
-                        docs.append(Document(
-                            page_content=t["text"],
-                            metadata={
-                                "user_id": user_id,
-                                "course_id": course_id,
-                                "page": img["page"],
-                                "type": "graphic",
-                                **t
-                            }
-                        ))
-                else:  # table rows
-                    headers = out.get("headers", [])
-                    for row in out.get("data", []):
-                        docs.append(Document(
-                            page_content="\t".join(row),
-                            metadata={
-                                "user_id": user_id,
-                                "course_id": course_id,
-                                "page": img["page"],
-                                "type": "table",
-                                "headers": headers
-                            }
-                        ))
-    
-    print(docs)
-
-    # 4) Bulk‐add to Qdrant via LangChain
-    #    this will call your NIM embed endpoint under the hood
-    await qdrant_vs.aadd_documents(docs)
+    await nim_vs.aadd_documents(splits)
 
 async def process_new_file(user_id, course_id, filename):
 
     s3_key = f'upload/{user_id}/{course_id}/{filename}'
+    composite_id = str(user_id) + str(course_id)
 
     loader = S3FileLoader(
         bucket="axon-main",
@@ -164,61 +96,96 @@ async def process_new_file(user_id, course_id, filename):
     )
     docs = await loader.aload()
 
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    splits = splitter.split_documents(docs) # TODO async
+
+    #for doc in splits:
+    #    doc.metadata["topic"] = ["Syllabus"]
+    #    doc.metadata["user_id"] = user_id
+    #    doc.metadata["course_id"] = int(course_id)
+    
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+
+    await nim_vs.aadd_documents(splits)
+
+qa_stuff_chain = create_stuff_documents_chain(
+    llm=llm,
+    prompt=qa_prompt,
+    output_parser=NoOpOutputParser()
+)
+
+async def answer_message(user_id, course_id, user_query):
     composite_id = str(user_id) + str(course_id)
 
-    async with boto.resource("dynamodb") as dynamodb:
-        table = await dynamodb.Table('learning-plans')
-        #dynamo_response = await table.get_item(Key=user_id)
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+    nim_retriever = nim_vs.as_retriever()
 
+    qa_chain = create_retrieval_chain(
+        retriever=nim_retriever,
+        combine_docs_chain=qa_stuff_chain
+    )
+
+    async with boto.resource("dynamodb") as dynamodb:
+        table = await dynamodb.Table("chat-history")
+
+        # 1) Load up to the last 30 messages, newest first
         dynamo_response = await table.query(
             KeyConditionExpression=Key("user_id").eq(composite_id),
             ScanIndexForward=False,
-            Limit=1,
+            Limit=30,
         )
-        dynamo_items = dynamo_response.get("Items", [])
+        items = dynamo_response.get("Items", [])
+        # reverse so that history is oldest→newest
+        items = list(reversed(items))
 
-        if dynamo_items:
-            lp_curr = json.loads(dynamo_items[0]["data"])
-            print(lp_curr)
-            lp_topics = lp_curr["topics"]
-    
-    if not lp_topics:
-        return
-
-async def answer_message(user_id, course_id, user_query):
-    composite_id = str(request_data["user_id"])
-
-    async with boto.resource("dynamodb") as dynamodb:
-        table = await dynamodb.Table('chat-history')
-
-        print(f"Querying: {composite_id}")
-        dynamo_response = await table.query(
-            KeyConditionExpression=Key("user_id").eq(composite_id),
-            ScanIndexForward=False,  # newest first
-            Limit=30,               # get up to the last 100 items
-        )
-        dynamo_items = dynamo_response.get("Items", [])
-        dynamo_items = list(reversed(dynamo_items))
-
-
-        print(f"GOT LAST {len(dynamo_items)} ITEMS FOR {composite_id}:::")
-        print(dynamo_items)
-
-        if dynamo_items:
-            hist = [
-                json.loads(item["data"])
-                for item in dynamo_items
-            ]
-            return {
-                "status": "success",
-                "history": hist
-            }
+        # 2) Deserialize message history into a list of {role, content} dicts
+        if items:
+            history = [json.loads(item["data"]) for item in items]
         else:
-            return {
-                "status": "failure",
-                "history": None
-            }
+            history = []  # no history yet
 
+        # 3) Invoke your QA chain
+        result = await qa_chain.ainvoke({
+            "history": history,
+            "input": user_query
+        })
+        assistant_response = result["answer"].content
+
+        # 4) Persist the new user message + assistant response to DynamoDB
+        ts = int(time.time())  # current UNIX timestamp (seconds)
+
+        # Store the user's message
+        await table.put_item(Item={
+            "user_id": composite_id,
+            "timestamp": ts,
+            "data": json.dumps({
+                "role": "user",
+                "content": user_query
+            })
+        })
+
+        # Store the assistant's reply (use ts+1 to avoid colliding sort keys)
+        await table.put_item(Item={
+            "user_id": composite_id,
+            "timestamp": ts + 1,
+            "data": json.dumps({
+                "role": "assistant",
+                "content": assistant_response
+            })
+        })
+
+        # 5) Return only the assistant's response string
+        return assistant_response
 
 class FormulaSheet(BaseModel):
     text: str = Field(description="The contents of the formula sheet")
@@ -228,14 +195,23 @@ formula_stuff_chain = create_stuff_documents_chain(
     prompt=formula_prompt,
     output_parser=NoOpOutputParser()
 )
-formula_chain = create_retrieval_chain(
-    retriever=qdrant_retriever,
-    combine_docs_chain=formula_stuff_chain
-)
 
 async def generate_formula_sheet(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
+
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+    nim_retriever = nim_vs.as_retriever()
+
+    formula_chain = create_retrieval_chain(
+        retriever=nim_retriever,
+        combine_docs_chain=formula_stuff_chain
+    )
 
     async with boto.resource("dynamodb") as dynamodb:
         table = await dynamodb.Table('learning-plans')
@@ -274,14 +250,23 @@ study_stuff_chain = create_stuff_documents_chain(
     prompt=study_prompt,
     output_parser=NoOpOutputParser()
 )
-study_chain = create_retrieval_chain(
-    retriever=qdrant_retriever,
-    combine_docs_chain=study_stuff_chain
-)
 
 async def generate_study_guide(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
+
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+    nim_retriever = nim_vs.as_retriever()
+
+    study_chain = create_retrieval_chain(
+        retriever=nim_retriever,
+        combine_docs_chain=study_stuff_chain
+    )
 
     async with boto.resource("dynamodb") as dynamodb:
         table = await dynamodb.Table('learning-plans')
@@ -330,14 +315,23 @@ quiz_stuff_chain = create_stuff_documents_chain(
     prompt=quiz_prompt,
     output_parser=NoOpOutputParser()
 )
-quiz_chain = create_retrieval_chain(
-    retriever=qdrant_retriever,
-    combine_docs_chain=quiz_stuff_chain
-)
 
 async def generate_quiz(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
+
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+    nim_retriever = nim_vs.as_retriever()
+
+    quiz_chain = create_retrieval_chain(
+        retriever=nim_retriever,
+        combine_docs_chain=quiz_stuff_chain
+    )
 
     async with boto.resource("dynamodb") as dynamodb:
         table = await dynamodb.Table('learning-plans')
@@ -465,14 +459,23 @@ flash_stuff_chain = create_stuff_documents_chain(
     prompt=flash_prompt,
     output_parser=NoOpOutputParser()
 )
-flash_chain = create_retrieval_chain(
-    retriever=qdrant_retriever,
-    combine_docs_chain=flash_stuff_chain
-)
 
 async def generate_flashcards(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
+
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+    nim_retriever = nim_vs.as_retriever()
+
+    flash_chain = create_retrieval_chain(
+        retriever=nim_retriever,
+        combine_docs_chain=flash_stuff_chain
+    )
 
     async with boto.resource("dynamodb") as dynamodb:
         table = await dynamodb.Table('learning-plans')
@@ -502,9 +505,3 @@ async def generate_flashcards(user_id, course_id, user_query, topic_names):
         llm_response = (await flash_chain.ainvoke({"topics": topics, "input": user_query}))["answer"]
 
         return llm_response
-
-
-#def generate_topic_tags():
-    
-
-#def regenerate_topic_tags():
