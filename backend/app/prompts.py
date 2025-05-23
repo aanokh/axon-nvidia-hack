@@ -165,6 +165,9 @@ quiz_prompt = PromptTemplate.from_template(
 
     Create 10 relevant questions, providing concise question and options with hints for each.
 
+    Emphasize actual problem solving, for example ask actual problems that require calculations;
+    Do NOT just ask concepts
+
     Your topic(s) you should cover are: {topics}
 
     Here are some relevant snippets you can support your thought process with:
@@ -218,7 +221,10 @@ formula_prompt = PromptTemplate.from_template(
 
     Please return a JSON object matching the FormulaSheet schema.
 
-    Do not use ** for bold.
+    Do not write in bold!!
+
+    Important: for your latex, use single dollar signs $...$ for inline equations and
+    use double dollar signs $$..$$ for standalone equations!!! Don't use anything else!!
     """
     #When using latex, make sure to follow the following instructions and nothing else!
     #"""
@@ -247,7 +253,10 @@ study_prompt = PromptTemplate.from_template(
 
     Please return a JSON object matching the StudyGuide schema.
 
-    Do not use ** for bold.
+    Do not write in bold!!
+
+    Important: for your latex, use single dollar signs $...$ for inline equations and
+    use double dollar signs $$..$$ for standalone equations!!! Don't use anything else!!
     """
     #When using latex, make sure to follow the following instructions and nothing else!
     #"""

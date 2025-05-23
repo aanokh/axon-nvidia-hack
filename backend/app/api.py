@@ -197,7 +197,7 @@ async def process_new_file_handler(request: Request):
     user_id = request_data["user_id"]
     course_id = request_data["course_id"]
 
-    process_new_file(user_id, course_id, filename)
+    await process_new_file(user_id, course_id, filename)
 
     return {"status": "success"}
 
