@@ -1,0 +1,266 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 0 59% 30%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+
+    /* Sidebar specific colors */
+    --sidebar-background: 0 59% 36%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 100%;
+    --sidebar-ring: 0 0% 100%;
+    --sidebar-accent: 0 59% 26%;
+    --sidebar-accent-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 270 50% 40%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    /* Sidebar specific colors */
+    --sidebar-background: 270 40% 18%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-border: 270 30% 30%;
+    --sidebar-ring: 270 50% 50%;
+    --sidebar-accent: 270 50% 25%;
+    --sidebar-accent-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes tab-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.tab-active {
+  animation: tab-bounce 0.5s ease;
+}
+
+/* Dark mode transitions */
+.dark-transition {
+  @apply transition-colors duration-200;
+}
+
+/* Dark mode specific styles */
+.dark .bg-white {
+  @apply bg-gray-800;
+}
+
+.dark .text-gray-700 {
+  @apply text-gray-300;
+}
+
+.dark .text-gray-600 {
+  @apply text-gray-400;
+}
+
+.dark .text-gray-500 {
+  @apply text-gray-400;
+}
+
+.dark .border-gray-200 {
+  @apply border-gray-700;
+}
+
+.dark .bg-gray-50 {
+  @apply bg-gray-900;
+}
+
+.dark .bg-gray-100 {
+  @apply bg-gray-800;
+}
+
+.dark .shadow-sm {
+  @apply shadow-none;
+}
+
+.dark .shadow-md {
+  @apply shadow-none;
+}
+
+/* Custom dark mode colors for specific components */
+.dark .bg-[#8a2432] {
+  @apply bg-purple-900;
+}
+
+.dark .hover\:bg-[#732232]:hover {
+  @apply hover:bg-purple-800;
+}
+
+.dark .focus\:ring-[#8a2432]:focus {
+  @apply focus:ring-purple-700;
+}
+
+.dark .border-[#8a2432] {
+  @apply border-purple-700;
+}
+
+.dark .text-[#8a2432] {
+  @apply text-purple-400;
+}
+
+/* Dark mode for colored sections */
+.dark .bg-blue-100 {
+  @apply bg-blue-900/30;
+}
+
+.dark .bg-emerald-100 {
+  @apply bg-emerald-900/30;
+}
+
+.dark .bg-purple-100 {
+  @apply bg-purple-900/30;
+}
+
+.dark .bg-red-100 {
+  @apply bg-red-900/30;
+}
+
+.dark .bg-amber-100 {
+  @apply bg-amber-900/30;
+}
+
+.dark .bg-green-100 {
+  @apply bg-green-900/30;
+}
+
+.dark .text-blue-600 {
+  @apply text-blue-400;
+}
+
+.dark .text-emerald-600 {
+  @apply text-emerald-400;
+}
+
+.dark .text-purple-600 {
+  @apply text-purple-400;
+}
+
+.dark .text-red-600 {
+  @apply text-red-400;
+}
+
+.dark .text-amber-600 {
+  @apply text-amber-400;
+}
+
+.dark .text-green-600 {
+  @apply text-green-400;
+}
+
+.dark .border-blue-200 {
+  @apply border-blue-800;
+}
+
+.dark .border-emerald-200 {
+  @apply border-emerald-800;
+}
+
+.dark .border-purple-200 {
+  @apply border-purple-800;
+}
+
+.dark .text-blue-700 {
+  @apply text-blue-300;
+}
+
+.dark .text-emerald-700 {
+  @apply text-emerald-300;
+}
+
+.dark .text-purple-700 {
+  @apply text-purple-300;
+}
+
+.dark .hover\:border-blue-300:hover {
+  @apply hover:border-blue-700;
+}
+
+.dark .hover\:border-emerald-300:hover {
+  @apply hover:border-emerald-700;
+}
+
+.dark .hover\:border-purple-300:hover {
+  @apply hover:border-purple-700;
+}
+
+.dark .hover\:border-red-300:hover {
+  @apply hover:border-red-700;
+}
+
+.dark .hover\:border-amber-300:hover {
+  @apply hover:border-amber-700;
+}
+
+.dark .hover\:border-green-300:hover {
+  @apply hover:border-green-700;
+}
