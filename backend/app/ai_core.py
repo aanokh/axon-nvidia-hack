@@ -15,34 +15,29 @@ import time
 from langchain_core.output_parsers import BaseOutputParser
 from typing import Any, Optional
 from langchain_core.runnables import RunnableConfig
-from qdrant_client import QdrantClient
+#from qdrant_client import QdrantClient
 from dotenv import load_dotenv
 import os
-from langchain_qdrant import QdrantVectorStore
+#from langchain_qdrant import QdrantVectorStore
 from langchain_core.output_parsers import BaseOutputParser
 from typing import Any
 import json
 from langchain_community.document_loaders import S3FileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from nim_retriever import *
-
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
-qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
-qdrant_vs = QdrantVectorStore(
-    client=qdrant_client,
-    collection_name="axon",
-    embedding=embeddings
-)
-qdrant_retriever = qdrant_vs.as_retriever(
-    search_type="mmr",
-    search_kwargs={"k": 10}
-)
+import aiq.plugins.langchain.register
+from aiq.profiler.decorators.framework_wrapper import set_framework_profiler_handler
+from aiq.builder.workflow_builder import WorkflowBuilder
+from aiq.llm.openai_llm import OpenAIModelConfig
+from aiq.llm.openai_llm import openai_llm as register_openai_llm
+from aiq.embedder.openai_embedder import OpenAIEmbedderModelConfig
+from aiq.embedder.openai_embedder import openai_llm as register_openai_embedder
+from aiq.runtime.loader import load_config
 
 llm = ChatOpenAI(model_name="gpt-4o")
 
 class NoOpOutputParser(BaseOutputParser[Any]):
     def parse(self, text: Any) -> Any:
-        # Just return the input as-is, no parsing
         return text
 
     async def ainvoke(
@@ -51,11 +46,39 @@ class NoOpOutputParser(BaseOutputParser[Any]):
         config: Optional[RunnableConfig] = None,
         **kwargs,
     ) -> Any:
-        # Return input directly, no wrapping or parsing
         return input
 
-def convert_composite_id(composite_id: str) -> str:
+async def init_aiq_toolkit() -> WorkflowBuilder:
+    builder = WorkflowBuilder()
+
+    async with register_openai_embedder(
+            OpenAIEmbedderModelConfig(
+                api_key   = os.getenv("OPENAI_API_KEY"),
+                model_name="text-embedding-3-large",
+            ),
+            builder,
+        ), register_openai_llm(
+            OpenAIModelConfig(
+                api_key   = os.getenv("OPENAI_API_KEY"),
+                model_name="gpt-4o",
+            ),
+            builder,
+        ):
+        return builder
+
+def convert_composite_id(composite_id):
     return '_' + composite_id.replace('-', '_')
+
+async def get_nim_retriever(composite_id):
+    nim_vs = nimRAGVectorStore(
+        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
+        ingestion_url=os.getenv("NIM_INGESTION_URL"),
+        api_key=os.getenv("NIM_API_KEY"),
+        collection_name=convert_composite_id(composite_id)
+    )
+    #nim_retriever = aiq_client.instrument(nim_vs.as_retriever())
+    nim_retriever = nim_vs.as_retriever()
+    return nim_retriever
 
 async def process_syllabus(user_id, course_id, filename):
     
@@ -122,18 +145,30 @@ qa_stuff_chain = create_stuff_documents_chain(
 async def answer_message(user_id, course_id, user_query):
     composite_id = str(user_id) + str(course_id)
 
-    nim_vs = nimRAGVectorStore(
-        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
-        ingestion_url=os.getenv("NIM_INGESTION_URL"),
-        api_key=os.getenv("NIM_API_KEY"),
-        collection_name=convert_composite_id(composite_id)
-    )
-    nim_retriever = nim_vs.as_retriever()
+    nim_retriever = await get_nim_retriever(composite_id)
 
     qa_chain = create_retrieval_chain(
         retriever=nim_retriever,
         combine_docs_chain=qa_stuff_chain
     )
+
+    '''
+    personalization = {}
+    async with boto.resource("dynamodb") as dynamodb:
+        table = await dynamodb.Table('personalization')
+        #dynamo_response = await table.get_item(Key=user_id)
+
+        dynamo_response = await table.query(
+            KeyConditionExpression=Key("user_id").eq(user_id),
+            ScanIndexForward=False,
+            Limit=1,
+        )
+        dynamo_items = dynamo_response.get("Items", [])
+
+        if dynamo_items:
+            personalization = json.loads(dynamo_items[0]["data"])
+            print(personalization)
+    '''
 
     async with boto.resource("dynamodb") as dynamodb:
         table = await dynamodb.Table("chat-history")
@@ -200,13 +235,7 @@ async def generate_formula_sheet(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
 
-    nim_vs = nimRAGVectorStore(
-        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
-        ingestion_url=os.getenv("NIM_INGESTION_URL"),
-        api_key=os.getenv("NIM_API_KEY"),
-        collection_name=convert_composite_id(composite_id)
-    )
-    nim_retriever = nim_vs.as_retriever()
+    nim_retriever = await get_nim_retriever(composite_id)
 
     formula_chain = create_retrieval_chain(
         retriever=nim_retriever,
@@ -255,13 +284,7 @@ async def generate_study_guide(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
 
-    nim_vs = nimRAGVectorStore(
-        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
-        ingestion_url=os.getenv("NIM_INGESTION_URL"),
-        api_key=os.getenv("NIM_API_KEY"),
-        collection_name=convert_composite_id(composite_id)
-    )
-    nim_retriever = nim_vs.as_retriever()
+    nim_retriever = await get_nim_retriever(composite_id)
 
     study_chain = create_retrieval_chain(
         retriever=nim_retriever,
@@ -320,13 +343,7 @@ async def generate_quiz(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
 
-    nim_vs = nimRAGVectorStore(
-        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
-        ingestion_url=os.getenv("NIM_INGESTION_URL"),
-        api_key=os.getenv("NIM_API_KEY"),
-        collection_name=convert_composite_id(composite_id)
-    )
-    nim_retriever = nim_vs.as_retriever()
+    nim_retriever = await get_nim_retriever(composite_id)
 
     quiz_chain = create_retrieval_chain(
         retriever=nim_retriever,
@@ -464,13 +481,7 @@ async def generate_flashcards(user_id, course_id, user_query, topic_names):
 
     composite_id = str(user_id) + str(course_id)
 
-    nim_vs = nimRAGVectorStore(
-        retriever_url=os.getenv("NIM_RETRIEVER_URL"),
-        ingestion_url=os.getenv("NIM_INGESTION_URL"),
-        api_key=os.getenv("NIM_API_KEY"),
-        collection_name=convert_composite_id(composite_id)
-    )
-    nim_retriever = nim_vs.as_retriever()
+    nim_retriever = await get_nim_retriever(composite_id)
 
     flash_chain = create_retrieval_chain(
         retriever=nim_retriever,

@@ -9,6 +9,10 @@ import json
 
 app = FastAPI()
 
+@app.on_event("startup")
+async def startup_aiq():
+    app.state.aiq_builder = await init_aiq_toolkit()
+
 @app.get("/")
 async def read_root():
     print("Hello")

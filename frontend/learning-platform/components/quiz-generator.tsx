@@ -15,8 +15,10 @@ import {
   MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import "katex/dist/katex.min.css"
-import { InlineMath, BlockMath } from "react-katex"
+import ReactMarkdown from "react-markdown"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
+import rehypeHighlight from "rehype-highlight"
 import { Chatbot } from "./chatbot"
 
 // Types for course data
@@ -167,10 +169,8 @@ export function QuizGenerator() {
   useEffect(() => {
     async function fetchCourseData() {
       try {
-        // Get the active course ID from the URL or localStorage
-        // This is the same approach used in the learning plan component
-        const urlParams = new URLSearchParams(window.location.search)
-        const courseId = urlParams.get("courseId") || localStorage.getItem("activeCourseId") || "1"
+        // Get the active course ID from localStorage only
+        const courseId = localStorage.getItem("activeCourseId") || "1"
 
         setCourseId(courseId)
 
@@ -188,22 +188,22 @@ export function QuizGenerator() {
       } finally {
         setIsLoading(false)
       }
+
+      // Add this event listener inside the existing useEffect
+      const handleChatbotView = () => setIsShowingChatbot(true)
+      const handleChatbotCancel = () => setIsShowingChatbot(false)
+
+      window.addEventListener("view-chatbot-with-message", handleChatbotView as EventListener)
+      window.addEventListener("cancel-chatbot", handleChatbotCancel as EventListener)
+
+      // Add cleanup in the return statement
+      return () => {
+        window.removeEventListener("view-chatbot-with-message", handleChatbotView as EventListener)
+        window.removeEventListener("cancel-chatbot", handleChatbotCancel as EventListener)
+      }
     }
 
     fetchCourseData()
-
-    // Add this event listener inside the existing useEffect
-    const handleChatbotView = () => setIsShowingChatbot(true)
-    const handleChatbotCancel = () => setIsShowingChatbot(false)
-
-    window.addEventListener("view-chatbot-with-message", handleChatbotView as EventListener)
-    window.addEventListener("cancel-chatbot", handleChatbotCancel as EventListener)
-
-    // Add cleanup in the return statement
-    return () => {
-      window.removeEventListener("view-chatbot-with-message", handleChatbotView as EventListener)
-      window.removeEventListener("cancel-chatbot", handleChatbotCancel as EventListener)
-    }
   }, [])
 
   // Handle going back to main content
@@ -369,38 +369,66 @@ export function QuizGenerator() {
     }
   }
 
-  const renderTextWithLatex = (text: string) => {
-    // Split text by LaTeX delimiters and render accordingly
-    const parts = text.split(/(\$\$.*?\$\$|\$.*?\$)/gs)
-    return parts.map((part, index) => {
-      if (part.startsWith("$$") && part.endsWith("$$")) {
-        // Block math
-        try {
-          return <BlockMath key={index} math={part.slice(2, -2)} />
-        } catch (error) {
-          console.error("Error rendering block math:", error)
-          return (
-            <span key={index} className="text-red-500">
-              [Math Error]
-            </span>
-          )
+  function normalizeLatex(input: string): string {
+    if (typeof input !== "string") return input
+
+    // Step 1: Convert escaped newlines to actual newlines
+    let text = input.replace(/\\n/g, "\n")
+
+    // Step 2: Normalize LaTeX delimiters
+    text = text
+      .replace(/\\$$(.+?)\\$$/gs, (_, inner) => `$${inner.trim()}$`)
+      .replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`)
+
+    const lines = text.split("\n")
+    const result = []
+
+    let insideBlockMath = false
+    let blockBuffer = []
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+
+      if (trimmed === "$$") {
+        if (insideBlockMath) {
+          // Closing block
+          result.push("$$")
+          result.push(...blockBuffer.map((l) => l.trim()))
+          result.push("$$")
+          blockBuffer = []
+          insideBlockMath = false
+        } else {
+          // Opening block
+          insideBlockMath = true
+          blockBuffer = []
         }
-      } else if (part.startsWith("$") && part.endsWith("$")) {
-        // Inline math
-        try {
-          return <InlineMath key={index} math={part.slice(1, -1)} />
-        } catch (error) {
-          console.error("Error rendering inline math:", error)
-          return (
-            <span key={index} className="text-red-500">
-              [Math Error]
-            </span>
-          )
-        }
-      } else {
-        return part
+        continue
       }
+
+      if (insideBlockMath) {
+        blockBuffer.push(trimmed)
+      } else {
+        // Keep original line
+        result.push(line)
+      }
+    }
+
+    // In case block was never closed
+    if (insideBlockMath && blockBuffer.length) {
+      result.push("$$")
+      result.push(...blockBuffer.map((l) => l.trim()))
+      result.push("$$")
+    }
+
+    // Step 3: Join and clean up nested LaTeX
+    const joined = result.join("\n")
+
+    const sanitized = joined.replace(/\$\$([\s\S]*?)\$\$/g, (_, block) => {
+      const cleanBlock = block.replace(/\$(.+?)\$/g, (_, inner) => inner)
+      return `$$\n${cleanBlock.trim()}\n$$`
     })
+
+    return sanitized
   }
 
   // If quiz has been generated, show the quiz interface
@@ -498,7 +526,11 @@ export function QuizGenerator() {
 
           {/* Question Box */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold dark:text-white">{renderTextWithLatex(currentQuestion.question)}</h2>
+            <h2 className="text-xl font-semibold dark:text-white">
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
+                {normalizeLatex(currentQuestion.question)}
+              </ReactMarkdown>
+            </h2>
           </div>
 
           {/* Quiz Question */}
@@ -536,7 +568,11 @@ export function QuizGenerator() {
                           <div className="h-5 w-5 rounded-full border-2 border-gray-400" />
                         )}
                       </div>
-                      <span className="dark:text-gray-200">{renderTextWithLatex(option.text)}</span>
+                      <span className="dark:text-gray-200">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
+                          {normalizeLatex(option.text)}
+                        </ReactMarkdown>
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -546,7 +582,10 @@ export function QuizGenerator() {
             {showFeedback && (
               <div className="p-4 rounded-lg mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700">
                 <p className="font-medium text-red-800 dark:text-red-200">
-                  Incorrect! {renderTextWithLatex(showFeedback)}
+                  Incorrect!
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
+                    {normalizeLatex(showFeedback)}
+                  </ReactMarkdown>
                 </p>
               </div>
             )}

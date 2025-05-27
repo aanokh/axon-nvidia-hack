@@ -20,7 +20,7 @@ export function AppSidebar() {
   const [courses, setCourses] = useState<Course[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeCourse, setActiveCourse] = useState<number | null>(null)
+  const [activeCourseId, setActiveCourseId] = useState<number | null>(null)
   const [isViewingProfile, setIsViewingProfile] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
@@ -35,6 +35,22 @@ export function AppSidebar() {
     .join("")
     .toUpperCase()
     .substring(0, 2)
+
+  // Get active course ID from localStorage
+  const getActiveCourseId = () => {
+    const stored = localStorage.getItem("activeCourseId")
+    return stored ? Number.parseInt(stored) : null
+  }
+
+  // Set active course ID in localStorage
+  const setActiveCourseIdInStorage = (courseId: number | null) => {
+    if (courseId) {
+      localStorage.setItem("activeCourseId", courseId.toString())
+    } else {
+      localStorage.removeItem("activeCourseId")
+    }
+    setActiveCourseId(courseId)
+  }
 
   // Fetch courses from API
   const fetchCourses = async () => {
@@ -57,16 +73,18 @@ export function AppSidebar() {
     }
   }
 
-  // Fetch courses on initial load
+  // Initialize active course ID from localStorage on mount
   useEffect(() => {
+    const storedCourseId = getActiveCourseId()
+    setActiveCourseId(storedCourseId)
     fetchCourses()
   }, [])
 
-  // Listen for profile view events
+  // Listen for events
   useEffect(() => {
     const handleCourseChanged = (e: Event) => {
       const courseId = (e as CustomEvent).detail
-      setActiveCourse(courseId)
+      setActiveCourseIdInStorage(courseId)
       setIsViewingProfile(false)
     }
 
@@ -78,37 +96,38 @@ export function AppSidebar() {
       setIsViewingProfile(false)
     }
 
-    window.addEventListener("view-profile", handleViewProfile)
-    window.addEventListener("cancel-profile-view", handleCancelProfileView)
-    window.addEventListener("course-changed", handleCourseChanged as EventListener)
-
-    return () => {
-      window.removeEventListener("view-profile", handleViewProfile)
-      window.removeEventListener("cancel-profile-view", handleCancelProfileView)
-      window.removeEventListener("course-changed", handleCourseChanged as EventListener)
-    }
-  }, [])
-
-  // Listen for refresh-courses event
-  useEffect(() => {
     const handleRefreshCourses = async () => {
       await fetchCourses()
+      // Sync the active course ID from localStorage after refreshing courses
+      const storedCourseId = getActiveCourseId()
+      setActiveCourseId(storedCourseId)
     }
 
+    const handleCourseCreated = (event: CustomEvent) => {
+      const { course, shouldSelect } = event.detail
+      if (shouldSelect) {
+        // Update the sidebar's active course state immediately
+        setActiveCourseIdInStorage(course.id)
+      }
+    }
+
+    window.addEventListener("course-changed", handleCourseChanged as EventListener)
+    window.addEventListener("view-profile", handleViewProfile)
+    window.addEventListener("cancel-profile-view", handleCancelProfileView)
     window.addEventListener("refresh-courses", handleRefreshCourses as EventListener)
+    window.addEventListener("course-created", handleCourseCreated as EventListener)
+
     return () => {
+      window.removeEventListener("course-changed", handleCourseChanged as EventListener)
+      window.removeEventListener("view-profile", handleViewProfile)
+      window.removeEventListener("cancel-profile-view", handleCancelProfileView)
       window.removeEventListener("refresh-courses", handleRefreshCourses as EventListener)
+      window.removeEventListener("course-created", handleCourseCreated as EventListener)
     }
   }, [])
 
-  // Set default active course on home page
-  useEffect(() => {
-    // No longer auto-selecting the first course
-    // This effect is kept for potential future functionality
-  }, [pathname, activeCourse, isViewingProfile, courses])
-
   const handleCourseClick = (courseId: number) => {
-    setActiveCourse(courseId)
+    setActiveCourseIdInStorage(courseId)
     setIsViewingProfile(false)
 
     // Cancel any special views
@@ -127,7 +146,6 @@ export function AppSidebar() {
   }
 
   const handleProfileClick = () => {
-    // De-highlight any active course
     setIsViewingProfile(true)
     window.dispatchEvent(new CustomEvent("view-profile"))
   }
@@ -186,7 +204,7 @@ export function AppSidebar() {
               <li key={course.id}>
                 <div
                   className={`w-full ${
-                    activeCourse === course.id && !isViewingProfile ? "bg-white/20" : "hover:bg-white/10"
+                    activeCourseId === course.id && !isViewingProfile ? "bg-white/20" : "hover:bg-white/10"
                   }`}
                 >
                   <button className="px-4 py-3 text-left w-full" onClick={() => handleCourseClick(course.id)}>
@@ -203,4 +221,3 @@ export function AppSidebar() {
     </div>
   )
 }
-

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
     console.log(JSON.stringify(result));
 
-    const formulaSheet = result.result.text.replace(/\*\*/g, '');
+    const formulaSheet = result.result.text//.replace(/\*\*/g, '');
 
     return NextResponse.json({
       success: true,

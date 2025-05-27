@@ -103,9 +103,8 @@ export function LearningPlan() {
   useEffect(() => {
     async function fetchCourseData() {
       try {
-        // Get the active course ID from the URL or a custom event
-        const urlParams = new URLSearchParams(window.location.search)
-        const courseId = urlParams.get("courseId") || localStorage.getItem("activeCourseId") || "1"
+        // Get the active course ID from localStorage only
+        const courseId = localStorage.getItem("activeCourseId") || "1"
 
         const response = await fetch(`/api/learning-plan/${courseId}`)
 
@@ -139,7 +138,6 @@ export function LearningPlan() {
     }
 
     fetchCourseData()
-    // Empty dependency array ensures this only runs once when component mounts
   }, [])
 
   // Helper functions
@@ -331,9 +329,8 @@ export function LearningPlan() {
     if (!courseData || !tempData) return
 
     try {
-      // Get the active course ID from the URL or localStorage, just like we do when fetching
-      const urlParams = new URLSearchParams(window.location.search)
-      const courseId = urlParams.get("courseId") || localStorage.getItem("activeCourseId") || "1"
+      // Get the active course ID from localStorage only
+      const courseId = localStorage.getItem("activeCourseId") || "1"
 
       // Prepare the updated data
       const updatedData = {
@@ -344,7 +341,7 @@ export function LearningPlan() {
         additional_info: tempData.additionalInfo,
       }
 
-      // Send PUT request to update the learning plan with the correct courseId
+      // Send PUT request to update the learning plan
       const response = await fetch(`/api/learning-plan/${courseId}`, {
         method: "PUT",
         headers: {
@@ -946,4 +943,3 @@ export function LearningPlan() {
     </div>
   )
 }
-

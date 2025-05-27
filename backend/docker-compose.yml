@@ -10,7 +10,9 @@ services:
       - .env
     depends_on:
       - db
-  
+      - rag-server
+      - ingestor-server
+
   db:
     image: postgres:14
     container_name: db
@@ -22,7 +24,53 @@ services:
     ports:
       - "5432:5432"            # expose to host
     volumes:
+      - ./db-init:/docker-entrypoint-initdb.d
       - pgdata:/var/lib/postgresql/data
+
+  # --- NVIDIA RAG SERVICES ---
+
+  # ─────────── Vector DB Stack ───────────
+  milvus:
+    extends:
+      file: rag/deploy/compose/vectordb.yaml
+      service: milvus
+
+  etcd:
+    extends:
+      file: rag/deploy/compose/vectordb.yaml
+      service: etcd
+
+  minio:
+    extends:
+      file: rag/deploy/compose/vectordb.yaml
+      service: minio
+
+  # ─── Ingestor Server ────
+  ingestor-server:
+    extends:
+      file: rag/deploy/compose/docker-compose-ingestor-server.yaml
+      service: ingestor-server
+  
+  nv-ingest-ms-runtime:
+    extends:
+      file: rag/deploy/compose/docker-compose-ingestor-server.yaml
+      service: nv-ingest-ms-runtime
+
+  redis:
+    extends:
+      file: rag/deploy/compose/docker-compose-ingestor-server.yaml
+      service: redis
+
+  # ──── RAG Microservice ────
+  rag-server:
+    extends:
+      file: rag/deploy/compose/docker-compose-rag-server.yaml
+      service: rag-server
+  
+  rag-playground:
+    extends:
+      file: rag/deploy/compose/docker-compose-rag-server.yaml
+      service: rag-playground
 
 volumes:
   pgdata:

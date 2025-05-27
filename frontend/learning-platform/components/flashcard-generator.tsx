@@ -95,10 +95,8 @@ export function FlashcardGenerator() {
   useEffect(() => {
     async function fetchCourseData() {
       try {
-        // Get the active course ID from the URL or localStorage
-        // This is the same approach used in the learning plan component
-        const urlParams = new URLSearchParams(window.location.search)
-        const courseId = urlParams.get("courseId") || localStorage.getItem("activeCourseId") || "1"
+        // Get the active course ID from localStorage only
+        const courseId = localStorage.getItem("activeCourseId") || "1"
 
         setCourseId(courseId)
 
@@ -509,4 +507,3 @@ export function FlashcardGenerator() {
     </div>
   )
 }
-

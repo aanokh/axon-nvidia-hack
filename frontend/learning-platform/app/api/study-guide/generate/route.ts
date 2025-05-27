@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
     console.log(JSON.stringify(result));
 
-    const studyGuide = result.result.text.replace(/\*\*/g, '');
+    const studyGuide = result.result.text//.replace(/\*\*/g, '');
 
     console.log(studyGuide)
 

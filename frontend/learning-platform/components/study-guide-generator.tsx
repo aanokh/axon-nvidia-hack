@@ -1,10 +1,13 @@
 "use client"
 
-import { useState, useEffect, type ReactNode } from "react"
+import { useState, useEffect } from "react"
 import { ArrowLeft, BookOpen, FileText, Sparkles, CheckCircle2, Circle, Info, Lightbulb, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import ReactMarkdown from "react-markdown"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
-import { InlineMath, BlockMath } from "react-katex"
+import rehypeHighlight from "rehype-highlight"
 
 // Types for course data
 type Topic = {
@@ -67,6 +70,69 @@ const studyGuideTemplates = [
   },
 ]
 
+// LaTeX normalization function adapted from CrawlAI
+function normalizeLatex(input: string): string {
+  if (typeof input !== "string") return input
+
+  // Step 1: Convert escaped newlines to actual newlines
+  let text = input.replace(/\\n/g, "\n")
+
+  // Step 2: Normalize LaTeX delimiters
+  text = text
+    .replace(/\\$$(.+?)\\$$/gs, (_, inner) => `$${inner.trim()}$`)
+    .replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`)
+
+  const lines = text.split("\n")
+  const result = []
+
+  let insideBlockMath = false
+  let blockBuffer = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    if (trimmed === "$$") {
+      if (insideBlockMath) {
+        // Closing block
+        result.push("$$")
+        result.push(...blockBuffer.map((l) => l.trim()))
+        result.push("$$")
+        blockBuffer = []
+        insideBlockMath = false
+      } else {
+        // Opening block
+        insideBlockMath = true
+        blockBuffer = []
+      }
+      continue
+    }
+
+    if (insideBlockMath) {
+      blockBuffer.push(trimmed)
+    } else {
+      // Keep original line
+      result.push(line)
+    }
+  }
+
+  // In case block was never closed
+  if (insideBlockMath && blockBuffer.length) {
+    result.push("$$")
+    result.push(...blockBuffer.map((l) => l.trim()))
+    result.push("$$")
+  }
+
+  // Step 3: Join and clean up nested LaTeX
+  const joined = result.join("\n")
+
+  const sanitized = joined.replace(/\$\$([\s\S]*?)\$\$/g, (_, block) => {
+    const cleanBlock = block.replace(/\$(.+?)\$/g, (_, inner) => inner)
+    return `$$\n${cleanBlock.trim()}\n$$`
+  })
+
+  return sanitized
+}
+
 export function StudyGuideGenerator() {
   // State for course data
   const [courseData, setCourseData] = useState<CourseData | null>(null)
@@ -96,9 +162,8 @@ export function StudyGuideGenerator() {
   useEffect(() => {
     async function fetchCourseData() {
       try {
-        // Get the active course ID from the URL or localStorage
-        const urlParams = new URLSearchParams(window.location.search)
-        const courseId = urlParams.get("courseId") || localStorage.getItem("activeCourseId") || "1"
+        // Get the active course ID from localStorage only
+        const courseId = localStorage.getItem("activeCourseId") || "1"
 
         setCourseId(courseId)
 
@@ -190,8 +255,6 @@ export function StudyGuideGenerator() {
           courseId,
           topics: selectedTopics,
           prompt: customPrompt,
-          // Add a format instruction for the backend
-          formatInstructions: "Use $...$ for inline LaTeX and $$...$$$ for block LaTeX equations.",
         }),
       })
 
@@ -230,47 +293,6 @@ export function StudyGuideGenerator() {
     setStudyGuide(null)
   }
 
-  // Simple function to render text with LaTeX
-  const renderTextWithLatex = (text: string): ReactNode[] => {
-    if (!text) return [null]
-
-    // Only split by $...$ and $$...$$ delimiters
-    const parts = text.split(/(\$\$.*?\$\$|\$.*?\$)/gs)
-
-    return parts.map((part, index) => {
-      // Handle block math with double dollar signs: $$...$$
-      if (part.startsWith("$$") && part.endsWith("$$")) {
-        try {
-          return <BlockMath key={index} math={part.slice(2, -2)} />
-        } catch (error) {
-          console.error("Error rendering block math:", error)
-          return (
-            <span key={index} className="text-red-500">
-              [Math Error]
-            </span>
-          )
-        }
-      }
-      // Handle inline math with single dollar signs: $...$
-      else if (part.startsWith("$") && part.endsWith("$")) {
-        try {
-          return <InlineMath key={index} math={part.slice(1, -1)} />
-        } catch (error) {
-          console.error("Error rendering inline math:", error)
-          return (
-            <span key={index} className="text-red-500">
-              [Math Error]
-            </span>
-          )
-        }
-      }
-      // Regular text
-      else {
-        return <span key={index}>{part}</span>
-      }
-    })
-  }
-
   // If study guide has been generated, show the study guide viewer
   if (studyGuide) {
     return (
@@ -304,7 +326,9 @@ export function StudyGuideGenerator() {
           {/* Study Guide Content */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-8">
             <div className="prose prose-lg max-w-none dark:prose-invert">
-              <div className="whitespace-pre-line">{renderTextWithLatex(studyGuide || "")}</div>
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
+                {normalizeLatex(studyGuide || "")}
+              </ReactMarkdown>
             </div>
           </div>
         </div>

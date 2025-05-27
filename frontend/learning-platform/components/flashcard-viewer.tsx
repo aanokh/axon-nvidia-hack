@@ -15,10 +15,9 @@ export type Flashcard = {
 interface FlashcardViewerProps {
   flashcards: Flashcard[]
   onBack: () => void
-  courseId?: string // Add courseId prop
 }
 
-export function FlashcardViewer({ flashcards, onBack, courseId }: FlashcardViewerProps) {
+export function FlashcardViewer({ flashcards, onBack }: FlashcardViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [isFlipping, setIsFlipping] = useState(false)
@@ -42,7 +41,7 @@ export function FlashcardViewer({ flashcards, onBack, courseId }: FlashcardViewe
 
   // If chatbot is showing, render it on top
   if (isShowingChatbot) {
-    return <Chatbot courseId={courseId || localStorage.getItem("activeCourseId") || "1"} courseName="Course" />
+    return <Chatbot courseId={localStorage.getItem("activeCourseId") || "1"} courseName="Course" />
   }
 
   const handleNext = () => {
@@ -74,22 +73,22 @@ export function FlashcardViewer({ flashcards, onBack, courseId }: FlashcardViewe
 
   // Example of using courseId in a function (for future implementation)
   const handleExport = async () => {
-    console.log(`Exporting flashcards for course ID: ${courseId || "unknown"}`)
+    const activeCourseId = localStorage.getItem("activeCourseId") || "unknown"
+    console.log(`Exporting flashcards for course ID: ${activeCourseId}`)
     // In a real implementation, this would use the courseId to export flashcards
-    // For example:
-    // await fetch(`/api/flashcards/export?courseId=${courseId}`)
   }
 
   const handleShare = async () => {
-    console.log(`Sharing flashcards for course ID: ${courseId || "unknown"}`)
+    const activeCourseId = localStorage.getItem("activeCourseId") || "unknown"
+    console.log(`Sharing flashcards for course ID: ${activeCourseId}`)
     // In a real implementation, this would use the courseId to share flashcards
   }
 
   const handleAskChatbot = () => {
     const message = `I have a question about this flashcard:\n\nQuestion: ${currentFlashcard.question}\nAnswer: ${currentFlashcard.answer}\n\nCan you help me understand this better?`
 
-    // Get the active course ID from props or localStorage
-    const activeCourseId = courseId || localStorage.getItem("activeCourseId") || "1"
+    // Get the active course ID from localStorage
+    const activeCourseId = localStorage.getItem("activeCourseId") || "1"
 
     // Store the message and course info
     localStorage.setItem("chatbotInitialMessage", message)

@@ -12,7 +12,12 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+#RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
+
+RUN pip install --upgrade pip \
+  && pip install --no-cache-dir arize-phoenix==7.12.3 \
+  && pip install --no-cache-dir --no-deps aiqtoolkit aiqtoolkit-langchain \
+  && pip install --no-cache-dir -r requirements.txt
 
 COPY ./app ./app
 

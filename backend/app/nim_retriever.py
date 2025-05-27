@@ -193,6 +193,7 @@ class nimRAGVectorStore(VectorStore):
                             },
                         )
                     )
+                print(f"Retriever Docs Count: {len(docs)}")
                 return docs
 
     def similarity_search_by_vector(

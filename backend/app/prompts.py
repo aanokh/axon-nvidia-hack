@@ -198,6 +198,7 @@ qa_prompt = PromptTemplate.from_template(
 
     The user's request is:
     {input}
+
     """
 )
 
@@ -264,27 +265,4 @@ study_prompt = PromptTemplate.from_template(
     #When using latex, make sure to follow the following instructions and nothing else!
     #"""
     #+ f"{latex_format_instructions}"
-)
-
-tag_file_prompt = PromptTemplate.from_template(
-    """You are a professor with 30 years of experience. Your task is to generate some useful and concise flashcards
-    based on the materials provided. You will be given one or more topics, a user request, and some context snippets
-    from relevant lecture transcripts and book materials.
-
-    Make flashcards to assist with memorizing core information like names, formulas, equations, concepts,
-    procedures, etc. Make sure that the answers and questions are simple and conceptual, and can be solved
-    mentally without needing to actually do calculations or use paper. You are making flashcards NOT practice problems!
-
-    Create 10 relevant flashcards, providing a concise question and correct answer for each.
-
-    Your topic(s) you should cover are: {topics}
-
-    Here are some relevant snippets you can support your thought process with:
-    {context}
-
-    The user's request is:
-    {input}
-
-    Please return a JSON object matching the FlashcardSet schema.
-    """
 )

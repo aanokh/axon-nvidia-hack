@@ -4,8 +4,11 @@ import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
 import { Send, ArrowLeft, User, Bot } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
+import rehypeHighlight from "rehype-highlight"
 import "katex/dist/katex.min.css"
-import { InlineMath, BlockMath } from "react-katex"
 
 // Update the Message type to the simplified schema
 type Message = {
@@ -26,12 +29,12 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Fetch chat history (previous messages) on component mount
+  // Update the fetchChatHistory function:
   useEffect(() => {
     const fetchChatHistory = async () => {
       setIsLoadingHistory(true)
       try {
-        // Call the actual history API route
+        // Use the courseId prop directly
         const response = await fetch(`/api/chat/history?courseId=${courseId}`)
 
         if (!response.ok) {
@@ -81,7 +84,7 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
     }
   }, [isLoadingHistory])
 
-  // Update the handleSendMessage function to call the API route
+  // Update the handleSendMessage function to use the courseId prop:
   const handleSendMessage = async () => {
     const messageToSend = input.trim()
     if (!messageToSend) return
@@ -102,7 +105,7 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
     setIsLoading(true)
 
     try {
-      // Call the actual API route
+      // Call the actual API route using the courseId prop
       const response = await fetch("/api/chat/message", {
         method: "POST",
         headers: {
@@ -154,38 +157,66 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
   }
 
   // Function to render text with LaTeX
-  const renderTextWithLatex = (text: string) => {
-    // Split text by LaTeX delimiters and render accordingly
-    const parts = text.split(/(\$\$.*?\$\$|\$.*?\$)/gs)
-    return parts.map((part, index) => {
-      if (part.startsWith("$$") && part.endsWith("$$")) {
-        // Block math
-        try {
-          return <BlockMath key={index} math={part.slice(2, -2)} />
-        } catch (error) {
-          console.error("Error rendering block math:", error)
-          return (
-            <span key={index} className="text-red-500">
-              [Math Error]
-            </span>
-          )
+  function normalizeLatex(input: string): string {
+    if (typeof input !== "string") return input
+
+    // Step 1: Convert escaped newlines to actual newlines
+    let text = input.replace(/\\n/g, "\n")
+
+    // Step 2: Normalize LaTeX delimiters
+    text = text
+      .replace(/\\$$(.+?)\\$$/gs, (_, inner) => `$${inner.trim()}$`)
+      .replace(/\\\[(.+?)\\\]/gs, (_, inner) => `$$${inner.trim()}$$`)
+
+    const lines = text.split("\n")
+    const result = []
+
+    let insideBlockMath = false
+    let blockBuffer = []
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+
+      if (trimmed === "$$") {
+        if (insideBlockMath) {
+          // Closing block
+          result.push("$$")
+          result.push(...blockBuffer.map((l) => l.trim()))
+          result.push("$$")
+          blockBuffer = []
+          insideBlockMath = false
+        } else {
+          // Opening block
+          insideBlockMath = true
+          blockBuffer = []
         }
-      } else if (part.startsWith("$") && part.endsWith("$")) {
-        // Inline math
-        try {
-          return <InlineMath key={index} math={part.slice(1, -1)} />
-        } catch (error) {
-          console.error("Error rendering inline math:", error)
-          return (
-            <span key={index} className="text-red-500">
-              [Math Error]
-            </span>
-          )
-        }
-      } else {
-        return part
+        continue
       }
+
+      if (insideBlockMath) {
+        blockBuffer.push(trimmed)
+      } else {
+        // Keep original line
+        result.push(line)
+      }
+    }
+
+    // In case block was never closed
+    if (insideBlockMath && blockBuffer.length) {
+      result.push("$$")
+      result.push(...blockBuffer.map((l) => l.trim()))
+      result.push("$$")
+    }
+
+    // Step 3: Join and clean up nested LaTeX
+    const joined = result.join("\n")
+
+    const sanitized = joined.replace(/\$\$([\s\S]*?)\$\$/g, (_, block) => {
+      const cleanBlock = block.replace(/\$(.+?)\$/g, (_, inner) => inner)
+      return `$$\n${cleanBlock.trim()}\n$$`
     })
+
+    return sanitized
   }
 
   return (
@@ -243,7 +274,11 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
                     </div>
                     <span className="font-medium">{message.role === "user" ? "You" : "Assistant"}</span>
                   </div>
-                  <div className="whitespace-pre-wrap">{renderTextWithLatex(message.content)}</div>
+                  <div className="whitespace-pre-wrap">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
+                      {normalizeLatex(message.content)}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             ))

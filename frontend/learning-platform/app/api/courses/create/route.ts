@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     const compositeId = userId.toString() + newCourseId.toString()
     const convertedCompositeId = `_${compositeId.replace(/-/g, '_')}`;
 
-    const response = await fetch("https://ingestor-i4tduvbc5.brevlab.com/v1/collections", {
+    const response = await fetch("http://localhost:8082/collections", {
       method: 'POST',
       headers: {
         'Authorization': `Bearer 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`,
