@@ -61,6 +61,29 @@ Damped Oscillations:
 x(t) = A e^(-bt/(2m)) cos(ω′ t + φ)
 """
 
+pz_prompt = PromptTemplate.from_template(
+    """
+    You are an esteemed professor with 30 years of experience of teaching and working with students.
+    Your task is to extract relevant personalization info based on a new interaction you just had with
+    the student, to enhance their education so it is more targeted and relevant.
+
+    You will be provided some new information, which could be either their score on an assessment or
+    a chat discussion, as well as their old personalization info. Based on the combination of
+    both informations, create a new personalization plan which is the average of the two.
+    Be aware, if the two informations differ by a lot, prioritize the old plan which has been assmebled
+    for many study sessions over the current session info!
+    If the new session supports the old plan, no need to change much.
+
+    Here is the old plan:
+    {existing}
+    
+    Here is the new update results after the current study session:
+    {new}
+
+    Please return a JSON object matching the PersonalizationInfo schema.
+    """
+)
+
 lp_new_prompt = PromptTemplate.from_template(
     """You are an academic assistant helping to build a structured learning plan for a student.
     Based on the content extracted from the provided course PDFs (syllabi, outlines, lecture notes, and other materials),
@@ -136,6 +159,8 @@ flash_prompt = PromptTemplate.from_template(
 
     Create 10 relevant flashcards, providing a concise question and correct answer for each.
 
+    User's personalization education info (disregard topics that are not for this course): {personalization}
+
     Your topic(s) you should cover are: {topics}
 
     Here are some relevant snippets you can support your thought process with:
@@ -168,6 +193,9 @@ quiz_prompt = PromptTemplate.from_template(
     Emphasize actual problem solving, for example ask actual problems that require calculations;
     Do NOT just ask concepts
 
+    User's personalization education info (disregard topics that are not for this course): {personalization}
+
+
     Your topic(s) you should cover are: {topics}
 
     Here are some relevant snippets you can support your thought process with:
@@ -189,6 +217,8 @@ qa_prompt = PromptTemplate.from_template(
     from relevant lecture transcripts and book materials that you should use for your answer.
     
     Be nice, helpful, and explain on an undergraduate university level.
+
+    User's personalization education info (disregard topics that are not for this course): {personalization}
 
     The previous chat history is:
     {history}
@@ -214,6 +244,8 @@ formula_prompt = PromptTemplate.from_template(
 
     DO NOT use markdown! You can use latex though. Aim for around half to one page though
     it can change depending on the query.
+
+    User's personalization education info (disregard topics that are not for this course): {personalization}
 
     Your topic(s) you should cover are: {topics}
 
@@ -246,6 +278,8 @@ study_prompt = PromptTemplate.from_template(
     
     DO NOT use markdown! You can use latex though. Aim for around one to two pages though
     it can change depending on the query.
+
+    User's personalization education info (disregard topics that are not for this course): {personalization}
 
     Your topic(s) you should cover are: {topics}
 

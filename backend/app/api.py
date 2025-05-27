@@ -32,6 +32,15 @@ async def generate_learning_plan_handler(request: Request):
 
     return {"status": "success", "user_id": request_data["user_id"]}
 
+@app.post("/update-personalization")
+async def update_personalization_handler(request: Request):
+    print("\nPERSONALIZATION!\n")
+    request_data = await request.json()
+
+    await extract_personalization(user_id=request_data["user_id"], new_info=request_data["data"])
+
+    return {"status": "success", "user_id": request_data["user_id"]}
+
 @app.post("/get-learning-plan")
 async def get_learning_plan_handler(request: Request):
     request_data = await request.json()

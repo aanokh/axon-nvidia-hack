@@ -147,9 +147,43 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
     }
   }
 
+  // Update the handleGoBack function to send chat history
   const handleGoBack = () => {
+    // Send chat history to personalization API before going back
+    if (messages.length > 0) {
+      sendChatHistoryToPersonalization()
+    }
+
     // Dispatch event to go back to main content
     window.dispatchEvent(new CustomEvent("cancel-chatbot"))
+  }
+
+  // Add this new function after the handleGoBack function
+  const sendChatHistoryToPersonalization = async () => {
+    try {
+      await fetch("/api/personalization/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "chat",
+          courseId,
+          data: {
+            messages: messages.map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+              timestamp: new Date().toISOString(),
+            })),
+            sessionDuration: Date.now() - (messages.length > 0 ? 0 : Date.now()), // Approximate
+            messageCount: messages.length,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      })
+    } catch (error) {
+      console.error("Error sending chat history to personalization:", error)
+    }
   }
 
   const formatTime = (date: Date) => {
@@ -196,8 +230,12 @@ export function Chatbot({ courseId, courseName }: ChatbotProps) {
       if (insideBlockMath) {
         blockBuffer.push(trimmed)
       } else {
-        // Keep original line
-        result.push(line)
+        // For regular text, add two spaces at the end for markdown line breaks
+        if (line.trim() === "") {
+          result.push("") // Empty line stays empty
+        } else {
+          result.push(line + "  ") // Add two spaces for line break
+        }
       }
     }
 

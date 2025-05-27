@@ -110,8 +110,12 @@ function normalizeLatex(input: string): string {
     if (insideBlockMath) {
       blockBuffer.push(trimmed)
     } else {
-      // Keep original line
-      result.push(line)
+      // For regular text, add two spaces at the end for markdown line breaks
+      if (line.trim() === "") {
+        result.push("") // Empty line stays empty
+      } else {
+        result.push(line + "  ") // Add two spaces for line break
+      }
     }
   }
 
@@ -325,7 +329,7 @@ export function FormulaGenerator() {
 
           {/* Formula Sheet Content */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-8">
-            <div className="prose prose-lg max-w-none dark:prose-invert">
+            <div className="prose prose-lg max-w-none dark:prose-invert [&>*]:leading-relaxed [&_p]:mb-4 [&_li]:mb-2 [&_h1]:mb-6 [&_h2]:mb-4 [&_h3]:mb-3">
               <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex, rehypeHighlight]}>
                 {normalizeLatex(formulaSheet || "")}
               </ReactMarkdown>

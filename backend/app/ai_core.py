@@ -189,10 +189,13 @@ async def answer_message(user_id, course_id, user_query):
         else:
             history = []  # no history yet
 
+        pz = await get_personalization(user_id)
+
         # 3) Invoke your QA chain
         result = await qa_chain.ainvoke({
             "history": history,
-            "input": user_query
+            "input": user_query,
+            "personalization": pz
         })
         assistant_response = result["answer"].content
 
@@ -267,7 +270,8 @@ async def generate_formula_sheet(user_id, course_id, user_query, topic_names):
         if not topics:
             topics = topic_names
 
-        llm_response = (await formula_chain.ainvoke({"topics": topics, "input": user_query}))["answer"]
+        pz = await get_personalization(user_id)
+        llm_response = (await formula_chain.ainvoke({"topics": topics, "input": user_query, "personalization": pz}))["answer"]
 
         return llm_response
 
@@ -316,7 +320,8 @@ async def generate_study_guide(user_id, course_id, user_query, topic_names):
         if not topics:
             topics = topic_names
 
-        llm_response = (await study_chain.ainvoke({"topics": topics, "input": user_query}))["answer"]
+        pz = await get_personalization(user_id)
+        llm_response = (await study_chain.ainvoke({"topics": topics, "input": user_query, "personalization": pz}))["answer"]
 
         return llm_response
 
@@ -375,9 +380,70 @@ async def generate_quiz(user_id, course_id, user_query, topic_names):
         if not topics:
             topics = topic_names
 
-        llm_response = (await quiz_chain.ainvoke({"topics": topics, "input": user_query}))["answer"]
+        pz = await get_personalization(user_id)
+        llm_response = (await quiz_chain.ainvoke({"topics": topics, "input": user_query, "personalization": pz}))["answer"]
 
         return llm_response
+
+class PersonalizationInfo(BaseModel):
+    topics_struggles: List[str] = Field(description="Topics the user struggles getting correct")
+    topics_aces: List[str] = Field(description="Topics the user seems to ace easily")
+    learning_style: str = Field(description="The User's preferred learning style")
+    user_preference: str = Field(description="Other info on what the user seems to prefer in their education")
+
+pz_chain = LLMChain(
+    llm=llm.with_structured_output(PersonalizationInfo, method="function_calling"),
+    prompt=pz_prompt,
+    output_parser=NoOpOutputParser()
+)
+
+async def get_personalization(user_id):
+    async with boto.resource("dynamodb") as dynamodb:
+        table = await dynamodb.Table('personalization')
+        #dynamo_response = await table.get_item(Key=user_id)
+
+        dynamo_response = await table.query(
+            KeyConditionExpression=Key("user_id").eq(user_id),
+            ScanIndexForward=False,
+            Limit=1,
+        )
+        dynamo_items = dynamo_response.get("Items", [])
+
+        if dynamo_items:
+            pz_curr = json.loads(dynamo_items[0]["data"])
+        else:
+            pz_curr = {"personalization": "No existing personalization for now."}
+    
+    return pz_curr
+
+async def extract_personalization(user_id, new_info):
+    async with boto.resource("dynamodb") as dynamodb:
+        table = await dynamodb.Table('personalization')
+        #dynamo_response = await table.get_item(Key=user_id)
+
+        dynamo_response = await table.query(
+            KeyConditionExpression=Key("user_id").eq(user_id),
+            ScanIndexForward=False,
+            Limit=1,
+        )
+        dynamo_items = dynamo_response.get("Items", [])
+
+        if dynamo_items:
+            pz_curr = json.loads(dynamo_items[0]["data"])
+        else:
+            pz_curr = {"personalization": "No existing personalization for now."}
+
+        llm_response = await pz_chain.ainvoke({"existing": pz_curr, "new": new_info})
+            
+        dynamo_item = {
+            "user_id": user_id,
+            "timestamp": int(time.time()),
+            "data": llm_response.dict()
+        }
+        
+        await table.put_item(Item=dynamo_item)
+        
+        print(f"Put new pz plan with prefix: {user_id}")
 
 class CourseTopic(BaseModel):
     topic_name: str = Field(description="Name of the topic")
@@ -431,8 +497,6 @@ async def generate_learning_plan(user_id, course_id):
                 print("Detected existing learning plan")
             else:
                 print("Making new learning plan")
-
-        print(f"Problematic user id, course id: {user_id} , {course_id}")
 
         loader = S3DirectoryLoader(
             bucket="axon-main",
@@ -513,6 +577,7 @@ async def generate_flashcards(user_id, course_id, user_query, topic_names):
         if not topics:
             topics = topic_names
 
-        llm_response = (await flash_chain.ainvoke({"topics": topics, "input": user_query}))["answer"]
+        pz = await get_personalization(user_id)
+        llm_response = (await flash_chain.ainvoke({"topics": topics, "input": user_query, "personalization": pz}))["answer"]
 
         return llm_response

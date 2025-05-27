@@ -318,8 +318,13 @@ export function QuizGenerator() {
     return topicColors[index % topicColors.length]
   }
 
-  // Handle back from quiz
+  // In the quiz results section, update the handleBackFromQuiz function
   const handleBackFromQuiz = () => {
+    // Send quiz results to personalization API before going back
+    if (quizQuestions && Object.keys(selectedAnswers).length > 0) {
+      sendQuizResultsToPersonalization()
+    }
+
     setQuizQuestions(null)
     setSelectedAnswers({})
     setShowFeedback(null)
@@ -356,6 +361,8 @@ export function QuizGenerator() {
         setCurrentQuestionIndex((prev) => prev + 1)
         setShowFeedback(null)
       } else {
+        // Quiz completed - send results to personalization API
+        sendQuizResultsToPersonalization()
         setShowingResults(true)
       }
     }
@@ -366,6 +373,52 @@ export function QuizGenerator() {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex((prev) => prev - 1)
       setShowFeedback(null)
+    }
+  }
+
+  // Add this new function after the handlePreviousQuestion function
+  const sendQuizResultsToPersonalization = async () => {
+    if (!quizQuestions) return
+
+    try {
+      const results = quizQuestions.map((question, index) => {
+        const userAnswerIndex = selectedAnswers[question.id]
+        const isCorrect = userAnswerIndex === question.correctOptionIndex
+
+        return {
+          questionId: question.id,
+          question: question.question,
+          userAnswer: userAnswerIndex !== undefined ? question.options[userAnswerIndex].text : null,
+          correctAnswer: question.options[question.correctOptionIndex].text,
+          isCorrect,
+          options: question.options.map((opt) => opt.text),
+        }
+      })
+
+      const correctAnswers = results.filter((r) => r.isCorrect).length
+      const totalQuestions = results.length
+      const percentage = Math.round((correctAnswers / totalQuestions) * 100)
+
+      await fetch("/api/personalization/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "quiz",
+          courseId,
+          data: {
+            questions: results,
+            score: correctAnswers,
+            totalQuestions,
+            percentage,
+            topics: selectedTopics,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      })
+    } catch (error) {
+      console.error("Error sending quiz results to personalization:", error)
     }
   }
 
@@ -408,8 +461,12 @@ export function QuizGenerator() {
       if (insideBlockMath) {
         blockBuffer.push(trimmed)
       } else {
-        // Keep original line
-        result.push(line)
+        // For regular text, add two spaces at the end for markdown line breaks
+        if (line.trim() === "") {
+          result.push("") // Empty line stays empty
+        } else {
+          result.push(line + "  ") // Add two spaces for line break
+        }
       }
     }
 
