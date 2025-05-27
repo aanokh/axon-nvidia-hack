@@ -54,8 +54,6 @@ This project was built for the NVIDIA Agentic Toolkit Hackathon, showcasing the 
 
 ## 🏗️ Architecture Diagrams
 
-
-
 ## 🚀 Deployment
 
 ## Due to this being a fullstack app, deployment is complicated and not recommended; visit the deployed version at https://axonlearn.com/ (uses this exact repo code)
