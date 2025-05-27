@@ -53,6 +53,10 @@ This project was built for the NVIDIA Agentic Toolkit Hackathon, showcasing the 
 - **Milvus** - Vector database for similarity search
 
 ## 🏗️ Architecture Diagrams
+<img width="560" alt="Screenshot 2025-05-27 at 11 57 49 AM" src="https://github.com/user-attachments/assets/b6369a9d-aba7-4c1c-a08f-a26f323a9964" />
+
+<img width="778" alt="Screenshot 2025-05-27 at 11 57 38 AM" src="https://github.com/user-attachments/assets/e95e3e39-aceb-42d8-9728-cf6342664344" />
+
 
 ## 🚀 Deployment
 
