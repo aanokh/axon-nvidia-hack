@@ -4,8 +4,6 @@
 
 ## Deployed at https://axonlearn.com/
 
-Demo Video: https://youtu.be/2hLfvUNRs1w
-
 An intelligent, full-stack education platform that leverages AI to create personalized learning experiences, featuring adaptive study plans, intelligent content generation, and conversational AI tutoring.
 
 ## 🏆 Hackathon Overview
